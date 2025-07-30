@@ -4,8 +4,13 @@ import { db } from "@/firebase";
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import SubjectForm from "./SubjectForm";
 
+interface Subject {
+  id: string;
+  name: string;
+}
+
 export default function SubjectList() {
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,7 +19,7 @@ export default function SubjectList() {
 
   const fetchList = async () => {
     const snap = await getDocs(collection(db, "subjects"));
-    setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setSubjects(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Subject)));
   };
 
   const handleAdd = async (name: string) => {
@@ -30,14 +35,14 @@ export default function SubjectList() {
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, "subjects", id));
-    setSubjects(subjects.filter(s => s.id !== id));
+    setSubjects(subjects.filter((s) => s.id !== id));
   };
 
   return (
     <div>
       <SubjectForm onSubmit={handleAdd} />
       <ul>
-        {subjects.map(s => (
+        {subjects.map((s) => (
           <li key={s.id} className="mb-3 flex items-center justify-between bg-white p-3 rounded shadow">
             {editing === s.id ? (
               <SubjectForm
@@ -53,11 +58,15 @@ export default function SubjectList() {
                   <button
                     className="text-blue-700 underline mr-2"
                     onClick={() => setEditing(s.id)}
-                  >Edit</button>
+                  >
+                    Modifier
+                  </button>
                   <button
                     className="text-red-600 underline"
                     onClick={() => handleDelete(s.id)}
-                  >Delete</button>
+                  >
+                    Supprimer
+                  </button>
                 </div>
               </>
             )}

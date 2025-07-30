@@ -1,14 +1,29 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function SubjectForm({ onSubmit, initialValue = "", editMode = false, onCancel }) {
+interface SubjectFormProps {
+  onSubmit: (name: string) => Promise<void> | void;
+  initialValue?: string;
+  editMode?: boolean;
+  onCancel?: () => void;
+}
+
+export default function SubjectForm({ onSubmit, initialValue = "", editMode = false, onCancel }: SubjectFormProps) {
   const [name, setName] = useState(initialValue);
 
-  const handleSubmit = (e: any) => {
+  useEffect(() => {
+    if (editMode) {
+      setName(initialValue);
+    }
+  }, [initialValue, editMode]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit(name);
-    setName("");
+    await onSubmit(name);
+    if (!editMode) {
+      setName("");
+    }
   };
 
   return (
@@ -16,15 +31,18 @@ export default function SubjectForm({ onSubmit, initialValue = "", editMode = fa
       <input
         className="border px-3 py-2 rounded"
         type="text"
-        placeholder="Subject name"
+        placeholder="Nom du sujet"
         value={name}
-        onChange={e => setName(e.target.value)}
+        onChange={(e) => setName(e.target.value)}
+        required
       />
       <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
-        {editMode ? "Save" : "Add"}
+        {editMode ? "Sauvegarder" : "Ajouter"}
       </button>
-      {editMode && (
-        <button className="bg-gray-200 px-3 py-2 rounded" type="button" onClick={onCancel}>Cancel</button>
+      {editMode && onCancel && (
+        <button className="bg-gray-200 px-3 py-2 rounded" type="button" onClick={onCancel}>
+          Annuler
+        </button>
       )}
     </form>
   );

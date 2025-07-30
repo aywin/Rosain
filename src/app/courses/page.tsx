@@ -3,13 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
-
-interface Course {
-  id: string;
-  titre: string;
-  id_niveau: string;
-  id_matiere: string;
-}
+import { mapCourseWithNames, Course } from "@/utils/mapCourse";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -19,7 +13,10 @@ export default function CoursesPage() {
   useEffect(() => {
     const fetchCourses = async () => {
       const snap = await getDocs(collection(db, "courses"));
-      setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course)));
+      const mapped = await Promise.all(
+        snap.docs.map((doc) => mapCourseWithNames(doc.id, doc.data()))
+      );
+      setCourses(mapped);
       setLoading(false);
     };
     fetchCourses();
@@ -34,11 +31,12 @@ export default function CoursesPage() {
         <div>Aucun cours disponible.</div>
       ) : (
         <ul>
-          {courses.map(c => (
+          {courses.map((c) => (
             <li key={c.id} className="mb-6 p-4 bg-white rounded shadow">
               <div className="font-bold text-lg mb-1">{c.titre}</div>
               <div className="mb-1 text-gray-700">
-                Niveau : <span className="font-semibold">{c.id_niveau}</span> | Matière : <span className="font-semibold">{c.id_matiere}</span>
+                Niveau : <span className="font-semibold">{c.niveau}</span> | Matière :{" "}
+                <span className="font-semibold">{c.matiere}</span>
               </div>
               <button
                 className="bg-blue-700 text-white px-3 py-1 rounded"

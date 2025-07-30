@@ -1,14 +1,31 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "@/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
-export default function LevelForm({ onSubmit, initialValue = "", editMode = false, onCancel }) {
+interface LevelFormProps {
+  onSubmit: (name: string) => Promise<void> | void;
+  initialValue?: string;
+  editMode?: boolean;
+  onCancel?: () => void;
+}
+
+export default function LevelForm({ onSubmit, initialValue = "", editMode = false, onCancel }: LevelFormProps) {
   const [name, setName] = useState(initialValue);
 
-  const handleSubmit = (e: any) => {
+  useEffect(() => {
+    if (editMode) {
+      setName(initialValue);
+    }
+  }, [initialValue, editMode]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit(name);
-    setName("");
+    await onSubmit(name);
+    if (!editMode) {
+      setName("");
+    }
   };
 
   return (
@@ -18,13 +35,16 @@ export default function LevelForm({ onSubmit, initialValue = "", editMode = fals
         type="text"
         placeholder="Nom du niveau"
         value={name}
-        onChange={e => setName(e.target.value)}
+        onChange={(e) => setName(e.target.value)}
+        required
       />
       <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
-        {editMode ? "Enregistrer" : "Ajouter"}
+        {editMode ? "Sauvegarder" : "Ajouter"}
       </button>
-      {editMode && (
-        <button className="bg-gray-200 px-3 py-2 rounded" type="button" onClick={onCancel}>Annuler</button>
+      {editMode && onCancel && (
+        <button className="bg-gray-200 px-3 py-2 rounded" type="button" onClick={onCancel}>
+          Annuler
+        </button>
       )}
     </form>
   );

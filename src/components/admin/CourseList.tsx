@@ -41,8 +41,9 @@ export default function CourseList() {
 
   const getLevelName = (id: string) => levels.find(l => l.id === id)?.name || id;
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.name || id;
-  const getVideosForCourse = (course_id: string) =>
-    videos.filter(v => v.course_id === course_id);
+  const getVideosForCourse = (courseId: string) =>
+  videos.filter(v => v.courseId === courseId);
+
 
   const handleAdd = async (data: any) => {
     await addDoc(collection(db, "courses"), {
@@ -92,7 +93,7 @@ export default function CourseList() {
                       : getVideosForCourse(c.id)
                           .sort((a, b) => (a.order || 0) - (b.order || 0))
                           .map(v => (
-                            <li key={v.id} className="text-gray-700">{v.title}</li>
+                            <li key={v.id} className="text-gray-700">{v.url}</li>
                           ))
                     }
                   </ul>

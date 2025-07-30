@@ -4,8 +4,13 @@ import { db } from "@/firebase";
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import LevelForm from "./LevelForm";
 
+interface Level {
+  id: string;
+  name: string;
+}
+
 export default function LevelList() {
-  const [levels, setLevels] = useState<any[]>([]);
+  const [levels, setLevels] = useState<Level[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,7 +19,7 @@ export default function LevelList() {
 
   const fetchList = async () => {
     const snap = await getDocs(collection(db, "levels"));
-    setLevels(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setLevels(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Level)));
   };
 
   const handleAdd = async (name: string) => {
@@ -30,14 +35,14 @@ export default function LevelList() {
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, "levels", id));
-    setLevels(levels.filter(l => l.id !== id));
+    setLevels(levels.filter((l) => l.id !== id));
   };
 
   return (
     <div>
       <LevelForm onSubmit={handleAdd} />
       <ul>
-        {levels.map(l => (
+        {levels.map((l) => (
           <li key={l.id} className="mb-3 flex items-center justify-between bg-white p-3 rounded shadow">
             {editing === l.id ? (
               <LevelForm
@@ -53,11 +58,15 @@ export default function LevelList() {
                   <button
                     className="text-blue-700 underline mr-2"
                     onClick={() => setEditing(l.id)}
-                  >Modifier</button>
+                  >
+                    Modifier
+                  </button>
                   <button
                     className="text-red-600 underline"
                     onClick={() => handleDelete(l.id)}
-                  >Supprimer</button>
+                  >
+                    Supprimer
+                  </button>
                 </div>
               </>
             )}

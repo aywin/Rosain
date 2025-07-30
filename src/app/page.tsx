@@ -6,14 +6,7 @@ import Header from "@/components/layout/Header";
 import CourseCard from "@/components/course/CourseCard";
 import BlogSection from "@/components/blog/BlogSection";
 import { useRouter } from "next/navigation";
-
-interface Course {
-  id: string;
-  titre: string;
-  description: string;
-  id_niveau: string;
-  id_matiere: string;
-}
+import { mapCourseWithNames, Course } from "@/utils/mapCourse";
 
 export default function HomePage() {
   const router = useRouter();
@@ -22,16 +15,22 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(u => setUser(u));
+    const unsubscribe = auth.onAuthStateChanged((u) => setUser(u));
     return unsubscribe;
   }, []);
 
   useEffect(() => {
     const fetchCourses = async () => {
       const snap = await getDocs(collection(db, "courses"));
-      setCourses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course)));
+
+      const mapped = await Promise.all(
+        snap.docs.map((doc) => mapCourseWithNames(doc.id, doc.data()))
+      );
+
+      setCourses(mapped);
       setLoading(false);
     };
+
     fetchCourses();
   }, []);
 
@@ -51,7 +50,7 @@ export default function HomePage() {
           <div>Aucun cours pour le moment.</div>
         ) : (
           <div>
-            {courses.slice(0, 3).map(course => (
+            {courses.slice(0, 3).map((course) => (
               <CourseCard key={course.id} course={course} locked={!user} />
             ))}
           </div>

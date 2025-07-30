@@ -2,15 +2,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
-import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
-
-interface Course {
-  id: string;
-  titre: string;
-  description: string;
-  id_niveau: string;
-  id_matiere: string;
-}
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc
+} from "firebase/firestore";
+import { mapCourseWithNames, Course } from "@/utils/mapCourse";
 
 export default function MyCoursesPage() {
   const router = useRouter();
@@ -19,26 +19,33 @@ export default function MyCoursesPage() {
   const [notLogged, setNotLogged] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async user => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         setNotLogged(true);
         setLoading(false);
         return;
       }
-      // Récupère les enrollments de l’utilisateur
-      const enrollSnap = await getDocs(query(collection(db, "enrollments"), where("id_user", "==", user.uid)));
-      const enrollments = enrollSnap.docs.map(doc => doc.data() as { id_course: string });
-      // Récupère les cours liés à chaque enrollment
+
+      // Récupère les inscriptions de l'utilisateur
+      const enrollSnap = await getDocs(
+        query(collection(db, "enrollments"), where("id_user", "==", user.uid))
+      );
+      const enrollments = enrollSnap.docs.map((doc) => doc.data() as { id_course: string });
+
       const courseList: Course[] = [];
+
       for (const enr of enrollments) {
         const docSnap = await getDoc(doc(db, "courses", enr.id_course));
         if (docSnap.exists()) {
-          courseList.push({ id: docSnap.id, ...docSnap.data() } as Course);
+          const mapped = await mapCourseWithNames(docSnap.id, docSnap.data());
+          courseList.push(mapped);
         }
       }
+
       setCourses(courseList);
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -75,20 +82,20 @@ export default function MyCoursesPage() {
         <div>Vous n'êtes inscrit à aucun cours pour l’instant.</div>
       ) : (
         <ul>
-          {courses.map(c => (
+          {courses.map((c) => (
             <li key={c.id} className="mb-6 p-4 bg-white rounded shadow">
               <div className="font-bold text-lg mb-1">{c.titre}</div>
               <div className="mb-1 text-gray-700">
-                Niveau : <span className="font-semibold">{c.id_niveau}</span> | Matière : <span className="font-semibold">{c.id_matiere}</span>
+                Niveau : <span className="font-semibold">{c.niveau}</span> | Matière :{" "}
+                <span className="font-semibold">{c.matiere}</span>
               </div>
               <div className="mb-2">{c.description}</div>
               <button
-  className="bg-green-700 text-white px-3 py-1 rounded"
-  onClick={() => router.push(`/tuto/${c.id}`)}
->
-  Accéder au cours
-</button>
-
+                className="bg-green-700 text-white px-3 py-1 rounded"
+                onClick={() => router.push(`/tuto/${c.id}`)}
+              >
+                Accéder au cours
+              </button>
             </li>
           ))}
         </ul>

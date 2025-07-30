@@ -1,86 +1,61 @@
-"use client";
-import { useEffect, useState } from "react";
-import { db } from "@/firebase";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import VideoForm from "./VideoForm";
+'use client';
 
-export default function VideoList() {
-  const [videos, setVideos] = useState<any[]>([]);
-  const [courses, setCourses] = useState<any[]>([]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editInitial, setEditInitial] = useState<any>({});
+import { useEffect, useState } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '@/firebase';
+
+interface Props {
+  courseId: string;
+  refresh: boolean;
+}
+
+interface Video {
+  id: string;
+  title: string;
+  url: string;
+  courseId: string;
+}
+
+const VideoList = ({ courseId, refresh }: Props) => {
+  const [videos, setVideos] = useState<Video[]>([]);
+
+  const fetchVideos = async () => {
+    const q = query(collection(db, 'videos'), where('courseId', '==', courseId));
+    const snapshot = await getDocs(q);
+    const data: Video[] = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<Video, 'id'>),
+    }));
+    setVideos(data);
+  };
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    if (courseId) fetchVideos();
+  }, [courseId, refresh]);
 
-  const fetchAll = async () => {
-    await fetchList();
-    await fetchCourses();
-  };
-
-  const fetchList = async () => {
-    const snap = await getDocs(collection(db, "videos"));
-    setVideos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
-
-  const fetchCourses = async () => {
-    const coursesSnap = await getDocs(collection(db, "courses"));
-    setCourses(coursesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
-
-  const getCourseTitle = (id: string) => courses.find(c => c.id === id)?.title || id;
-
-  const handleAdd = async (data: any) => {
-    await addDoc(collection(db, "videos"), {
-      ...data,
-      created_at: new Date(),
-    });
-    await fetchList();
-  };
-
-  const handleEdit = async (id: string, data: any) => {
-    await updateDoc(doc(db, "videos", id), data);
-    setEditing(null); setEditInitial({});
-    await fetchList();
-  };
-
-  const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, "videos", id));
-    setVideos(videos.filter(v => v.id !== id));
-  };
+  if (!courseId) return null;
 
   return (
-    <div>
-      <VideoForm onSubmit={handleAdd} />
-      <ul>
-        {videos.map(v => (
-          <li key={v.id} className="mb-3 bg-white p-3 rounded shadow flex flex-col gap-2">
-            {editing === v.id ? (
-              <VideoForm
-                onSubmit={data => handleEdit(v.id, data)}
-                initial={editInitial}
-                editMode
-                onCancel={() => { setEditing(null); setEditInitial({}); }}
-              />
-            ) : (
-              <>
-                <div className="font-bold">{v.title}</div>
-                <div className="text-xs text-gray-500">
-                  Order: {v.order} | Course: {getCourseTitle(v.course_id)}
-                </div>
-                <div className="text-xs text-gray-400">
-                  Storage: {v.storage_path}
-                </div>
-                <div>
-                  <button className="text-blue-700 underline mr-2" onClick={() => { setEditing(v.id); setEditInitial(v); }}>Edit</button>
-                  <button className="text-red-600 underline" onClick={() => handleDelete(v.id)}>Delete</button>
-                </div>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-6">
+      {videos.length > 0 ? (
+        videos.map((video) => (
+          <div key={video.id} className="border p-4 rounded">
+            <h3 className="font-semibold">{video.title}</h3>
+            <div className="aspect-video mt-2">
+              <iframe
+                className="w-full h-full"
+                src={video.url.replace('watch?v=', 'embed/')}
+                title={video.title}
+                allowFullScreen
+              ></iframe>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="text-gray-500">Aucune vidéo pour ce cours.</p>
+      )}
     </div>
   );
-}
+};
+
+export default VideoList;
