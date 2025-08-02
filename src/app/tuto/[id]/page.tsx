@@ -46,13 +46,13 @@ export default function TutoPage() {
       : undefined;
 
   const [showAssistant, setShowAssistant] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // Vérifie si l'utilisateur est inscrit
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user || !courseId) {
@@ -74,7 +74,6 @@ export default function TutoPage() {
     return () => unsubscribe();
   }, [courseId]);
 
-  // Récupère les infos du cours
   useEffect(() => {
     if (!courseId) return;
 
@@ -89,7 +88,6 @@ export default function TutoPage() {
     fetchCourse();
   }, [courseId]);
 
-  // Récupère les vidéos du cours
   useEffect(() => {
     if (!courseId) return;
 
@@ -140,23 +138,44 @@ export default function TutoPage() {
   if (videos.length === 0) return <div className="p-12">Aucune vidéo pour ce cours.</div>;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
-      <Sidebar
-        videos={videos.map((v) => ({ id: v.id, title: v.title }))}
-        current={current}
-        setCurrent={setCurrent}
-      />
+    <div className="flex h-screen w-full overflow-hidden relative">
+      {/* Sidebar (responsive) */}
+      <div
+        className={`
+          ${sidebarOpen ? "block" : "hidden"} 
+          fixed top-0 left-0 z-30 h-full w-64 bg-white shadow-lg 
+          lg:static lg:block
+        `}
+      >
+        <Sidebar
+          videos={videos.map((v) => ({ id: v.id, title: v.title }))}
+          current={current}
+          setCurrent={(i) => {
+            setCurrent(i);
+            setSidebarOpen(false);
+          }}
+        />
+      </div>
 
+      {/* Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-40 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Contenu principal */}
       <div className="flex-1 flex flex-col bg-blue-100 relative overflow-y-auto">
         <CourseHeader
           titre={course.titre}
           niveau={course.niveau}
           matiere={course.matiere}
           description={course.description}
+          onToggleSidebar={() => setSidebarOpen((v) => !v)}
         />
 
-        <div className="flex-1 flex flex-col items-stretch px-8 py-4 overflow-y-auto">
-
+        <div className="flex-1 flex flex-col items-stretch px-4 py-4 overflow-y-auto">
           {current !== null && videos[current] ? (
             <>
               <VideoPlayer
@@ -168,14 +187,15 @@ export default function TutoPage() {
             </>
           ) : (
             <div className="text-gray-500 mt-12 text-lg">
-              Veuillez sélectionner une vidéo dans la colonne de gauche.
+              Veuillez sélectionner une vidéo dans le menu.
             </div>
           )}
         </div>
       </div>
 
+      {/* Assistant Panel */}
       {showAssistant && (
-        <div className="w-[350px] max-w-full border-l bg-white h-full flex flex-col shadow-lg z-20">
+        <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full flex flex-col shadow-lg z-40">
           <AssistantPanel onClose={() => setShowAssistant(false)} />
         </div>
       )}

@@ -18,18 +18,18 @@ export default function CourseCard({ course, locked }: Props) {
   const router = useRouter();
 
   return (
-    <div className="mb-5 p-5 bg-white rounded-xl shadow-sm hover:shadow-md transition">
-      <div className="font-bold text-lg mb-1">{course.titre}</div>
+    <div className="mb-6 p-5 bg-white rounded-xl shadow-sm hover:shadow-md transition w-full">
+      <h3 className="font-bold text-lg mb-2 break-words">{course.titre}</h3>
 
-      <div className="mb-2 text-gray-500 text-sm">
-        <span className="font-semibold">Niveau :</span> {course.niveau}{" "}
-        | <span className="font-semibold">Matière :</span> {course.matiere}
-      </div>
+      <p className="text-sm text-gray-500 mb-2">
+        <span className="font-medium">Niveau :</span> {course.niveau || "Inconnu"}{" "}
+        | <span className="font-medium">Matière :</span> {course.matiere || "Inconnue"}
+      </p>
 
-      <div className="mb-3">{course.description}</div>
+      <p className="text-sm text-gray-700 mb-4 break-words">{course.description}</p>
 
       <button
-        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded"
+        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
         onClick={() =>
           locked
             ? router.push("/login")
