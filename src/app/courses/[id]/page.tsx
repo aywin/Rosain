@@ -22,7 +22,7 @@ interface Course {
 
 interface Video {
   id: string;
-  titre: string;
+  title: string;
   ordre?: number;
 }
 
@@ -168,7 +168,7 @@ export default function CoursePage() {
         <ol className="list-decimal pl-6">
           {videos.map((v) => (
             <li key={v.id} className="mb-2">
-              {v.titre}
+              {v.title}
             </li>
           ))}
         </ol>

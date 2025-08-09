@@ -26,7 +26,6 @@ export default function MyCoursesPage() {
         return;
       }
 
-      // Récupère les inscriptions de l'utilisateur
       const enrollSnap = await getDocs(
         query(collection(db, "enrollments"), where("id_user", "==", user.uid))
       );
@@ -51,8 +50,8 @@ export default function MyCoursesPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto py-10">
-        <h1 className="text-2xl font-bold mb-8">Mes cours</h1>
+      <div className="max-w-7xl mx-auto py-10 px-4 text-center">
+        <h1 className="text-3xl font-bold mb-8">Mes cours</h1>
         <div>Chargement...</div>
       </div>
     );
@@ -60,8 +59,8 @@ export default function MyCoursesPage() {
 
   if (notLogged) {
     return (
-      <div className="max-w-3xl mx-auto py-10">
-        <h1 className="text-2xl font-bold mb-8">Mes cours</h1>
+      <div className="max-w-7xl mx-auto py-10 px-4 text-center">
+        <h1 className="text-3xl font-bold mb-8">Mes cours</h1>
         <div>
           Vous devez être connecté pour voir vos cours.{" "}
           <button
@@ -76,23 +75,29 @@ export default function MyCoursesPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-8">Mes cours</h1>
+    <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <h1 className="text-3xl font-bold mb-8 text-center">Mes cours</h1>
       {courses.length === 0 ? (
-        <div>Vous n'êtes inscrit à aucun cours pour l’instant.</div>
+        <div className="text-center text-lg">
+          Vous n'êtes inscrit à aucun cours pour l’instant.
+        </div>
       ) : (
-        <ul>
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {courses.map((c) => (
-            <li key={c.id} className="mb-6 p-4 bg-white rounded shadow">
-              <div className="font-bold text-lg mb-1">{c.titre}</div>
-              <div className="mb-1 text-gray-700">
-                Niveau : <span className="font-semibold">{c.niveau}</span> | Matière :{" "}
-                <span className="font-semibold">{c.matiere}</span>
-              </div>
-              <div className="mb-2">{c.description}</div>
+            <li
+              key={c.id}
+              className="bg-white rounded-2xl border border-gray-200 shadow p-6 flex flex-col"
+            >
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">{c.titre}</h3>
+              <p className="text-sm mb-1 text-gray-700">
+                <span className="font-medium">Niveau :</span> {c.niveau || "Inconnu"} |{" "}
+                <span className="font-medium">Matière :</span> {c.matiere || "Inconnue"}
+              </p>
+              <p className="text-sm text-gray-600 mb-4 line-clamp-3">{c.description}</p>
+
               <button
-                className="bg-green-700 text-white px-3 py-1 rounded"
                 onClick={() => router.push(`/tuto/${c.id}`)}
+                className="mt-auto bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded transition"
               >
                 Accéder au cours
               </button>

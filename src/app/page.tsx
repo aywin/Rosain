@@ -1,62 +1,99 @@
 "use client";
-import { useEffect, useState } from "react";
-import { auth, db } from "@/firebase";
-import { collection, getDocs } from "firebase/firestore";
-import Header from "@/components/layout/Header";
-import CourseCard from "@/components/course/CourseCard";
-import BlogSection from "@/components/blog/BlogSection";
+
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { mapCourseWithNames, Course } from "@/utils/mapCourse";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/firebase"; // adapte ce chemin si besoin
+import CourseSection from "@/components/CourseSection"; // si tu veux afficher les cours aussi
 
 export default function HomePage() {
-  const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => setUser(u));
-    return unsubscribe;
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      const snap = await getDocs(collection(db, "courses"));
-
-      const mapped = await Promise.all(
-        snap.docs.map((doc) => mapCourseWithNames(doc.id, doc.data()))
-      );
-
-      setCourses(mapped);
-      setLoading(false);
-    };
-
-    fetchCourses();
-  }, []);
+  const handleExploreCourses = () => {
+    if (user) {
+      router.push("/courses");
+    } else {
+      router.push("/login");
+    }
+  };
 
   return (
-    <div className="max-w-3xl mx-auto py-4 px-2">
-      <Header />
-      <section className="mb-10">
-        <div className="bg-yellow-100 p-4 rounded mb-2 text-sm">
-          <strong>Bienvenue !</strong> Découvrez nos cours, articles, et conseils pour progresser.
+    <main className="min-h-screen bg-background text-foreground">
+      {/* Hero Section */}
+      <section className="bg-primary text-[oklch(25%_0.02_250)] py-20 px-6 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
+          Bienvenue sur votre plateforme éducative
+        </h1>
+        <p className="text-lg md:text-xl mb-8 max-w-2xl mx-auto">
+          Apprenez à votre rythme grâce à des cours vidéo de qualité, des quiz interactifs et un suivi personnalisé.
+        </p>
+        <button
+          onClick={handleExploreCourses}
+          className="inline-block bg-[oklch(60%_0.14_350)] text-white px-6 py-3 rounded-xl font-medium shadow hover:opacity-90 transition"
+        >
+          Explorer les cours
+        </button>
+      </section>
+
+      {/* Avantages */}
+      <section className="py-20 px-6 bg-[oklch(97%_0.04_350)] text-[oklch(25%_0.02_250)]">
+        <h2 className="text-3xl md:text-4xl font-semibold text-center mb-12">
+          Pourquoi nous choisir ?
+        </h2>
+        <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto">
+          {[
+            {
+              emoji: "🎓",
+              title: "Cours de qualité",
+              desc: "Des vidéos claires et pédagogiques, créées par des enseignants passionnés.",
+            },
+            {
+              emoji: "🧠",
+              title: "Quiz interactifs",
+              desc: "Testez vos connaissances avec des quiz ludiques et instantanés.",
+            },
+            {
+              emoji: "📈",
+              title: "Suivi intelligent",
+              desc: "Votre progression est enregistrée pour vous proposer le bon contenu au bon moment.",
+            },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className="bg-white text-[oklch(30%_0.02_250)] p-6 rounded-2xl shadow-md border border-[oklch(92%_0.01_345)]"
+            >
+              <h3 className="text-xl font-semibold mb-2">
+                {item.emoji} {item.title}
+              </h3>
+              <p className="text-sm leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Cours récents</h2>
-        {loading ? (
-          <div>Chargement…</div>
-        ) : courses.length === 0 ? (
-          <div>Aucun cours pour le moment.</div>
-        ) : (
-          <div>
-            {courses.slice(0, 3).map((course) => (
-              <CourseCard key={course.id} course={course} locked={!user} />
-            ))}
-          </div>
-        )}
+
+      {/* Section des cours */}
+      <CourseSection />
+
+      {/* Appel à l'action */}
+      <section className="bg-[oklch(60%_0.14_350)] text-white py-16 px-6 text-center">
+        <h2 className="text-2xl md:text-3xl font-bold mb-6">
+          Commencez dès aujourd'hui à apprendre autrement
+        </h2>
+        <button
+          onClick={() => router.push("/register")}
+          className="inline-block bg-white text-[oklch(60%_0.14_350)] px-6 py-3 rounded-xl font-semibold shadow hover:bg-opacity-90 transition"
+        >
+          Créer un compte
+        </button>
       </section>
-      <BlogSection />
-    </div>
+    </main>
   );
 }

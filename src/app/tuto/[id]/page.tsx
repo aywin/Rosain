@@ -26,41 +26,23 @@ interface Video {
   ordre?: number;
 }
 
-interface Course {
-  id: string;
-  titre: string;
-  description?: string;
-  niveau: string;
-  matiere: string;
-}
-
 export default function TutoPage() {
-  const params = useParams();
+  const { id } = useParams();
   const router = useRouter();
 
-  const courseId =
-    typeof params.id === "string"
-      ? params.id
-      : Array.isArray(params.id) && params.id.length > 0
-      ? params.id[0]
-      : undefined;
-
-  const [showAssistant, setShowAssistant] = useState(false);
+  const courseId = Array.isArray(id) ? id[0] : id;
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [course, setCourse] = useState<Course | null>(null);
+  const [course, setCourse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
+  // Vérifier l'inscription de l'utilisateur
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (!user || !courseId) {
-        setAllowed(false);
-        setLoading(false);
-        return;
-      }
-
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      if (!user || !courseId) return setLoading(false);
       const q = query(
         collection(db, "enrollments"),
         where("id_user", "==", user.uid),
@@ -70,85 +52,53 @@ export default function TutoPage() {
       setAllowed(!snap.empty);
       setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [courseId]);
 
+  // Charger le cours
   useEffect(() => {
     if (!courseId) return;
-
-    const fetchCourse = async () => {
-      const snap = await getDoc(doc(db, "courses", courseId));
-      if (snap.exists()) {
-        const courseData = await mapCourseWithNames(snap.id, snap.data());
-        setCourse(courseData);
-      }
-    };
-
-    fetchCourse();
+    getDoc(doc(db, "courses", courseId)).then(async (snap) => {
+      if (snap.exists()) setCourse(await mapCourseWithNames(snap.id, snap.data()));
+    });
   }, [courseId]);
 
+  // Charger les vidéos
   useEffect(() => {
     if (!courseId) return;
-
-    const fetchVideos = async () => {
-      const q = query(
-        collection(db, "videos"),
-        where("courseId", "==", courseId)
-      );
-      const snap = await getDocs(q);
+    const q = query(collection(db, "videos"), where("courseId", "==", courseId));
+    getDocs(q).then((snap) => {
       const vids = snap.docs
-        .map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            title: data.title,
-            url: data.url,
-            ordre: data.ordre,
-          } as Video;
-        })
+        .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
         .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
       setVideos(vids);
-    };
-
-    fetchVideos();
+    });
   }, [courseId]);
 
-  if (!courseId) {
-    return <div className="p-12 text-red-500">ID de cours manquant dans l’URL.</div>;
-  }
-
+  if (!courseId) return <div className="p-12 text-red-500">ID de cours manquant.</div>;
   if (loading) return <div className="p-12">Chargement…</div>;
-
   if (!allowed)
     return (
       <div className="p-12 text-red-500">
-        Accès refusé : vous n’êtes pas inscrit à ce cours.
-        <button
-          className="ml-4 underline text-blue-700"
-          onClick={() => router.push("/mycourses")}
-        >
+        Accès refusé : non inscrit.
+        <button className="ml-4 underline text-blue-700" onClick={() => router.push("/mycourses")}>
           Retour à mes cours
         </button>
       </div>
     );
-
   if (!course) return <div className="p-12">Cours introuvable.</div>;
-
-  if (videos.length === 0) return <div className="p-12">Aucune vidéo pour ce cours.</div>;
+  if (videos.length === 0) return <div className="p-12">Aucune vidéo disponible.</div>;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
-      {/* Sidebar (responsive) */}
+      {/* Sidebar */}
       <div
-        className={`
-          ${sidebarOpen ? "block" : "hidden"} 
-          fixed top-0 left-0 z-30 h-full w-64 bg-white shadow-lg 
-          lg:static lg:block
-        `}
+        className={`${
+          sidebarOpen ? "block" : "hidden"
+        } fixed top-0 left-0 z-30 h-full w-64 bg-white shadow-lg lg:static lg:block`}
       >
         <Sidebar
-          videos={videos.map((v) => ({ id: v.id, title: v.title }))}
+          videos={videos.map(({ id, title }) => ({ id, title }))}
           current={current}
           setCurrent={(i) => {
             setCurrent(i);
@@ -157,12 +107,9 @@ export default function TutoPage() {
         />
       </div>
 
-      {/* Overlay */}
+      {/* Overlay pour mobile */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-40 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Contenu principal */}
@@ -175,7 +122,7 @@ export default function TutoPage() {
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
         />
 
-        <div className="flex-1 flex flex-col items-stretch px-4 py-4 overflow-y-auto">
+        <div className="flex-1 flex flex-col px-4 py-4">
           {current !== null && videos[current] ? (
             <>
               <VideoPlayer
@@ -186,16 +133,14 @@ export default function TutoPage() {
               <VideoTranscript />
             </>
           ) : (
-            <div className="text-gray-500 mt-12 text-lg">
-              Veuillez sélectionner une vidéo dans le menu.
-            </div>
+            <div className="text-gray-500 mt-12 text-lg">Veuillez sélectionner une vidéo.</div>
           )}
         </div>
       </div>
 
       {/* Assistant Panel */}
       {showAssistant && (
-        <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full flex flex-col shadow-lg z-40">
+        <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full z-40 shadow-lg">
           <AssistantPanel onClose={() => setShowAssistant(false)} />
         </div>
       )}

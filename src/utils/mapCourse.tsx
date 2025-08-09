@@ -1,4 +1,3 @@
-// src/utils/mapCourse.tsx
 import { db } from "@/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -8,6 +7,7 @@ export interface Course {
   description: string;
   niveau: string;   // ex: "Terminale"
   matiere: string;  // ex: "Mathématiques"
+  img?: string;     // URL de l’image, optionnel
 }
 
 /**
@@ -20,12 +20,12 @@ export async function mapCourseWithNames(id: string, data: any): Promise<Course>
   try {
     const niveauSnap = await getDoc(doc(db, "levels", data.level_id));
     if (niveauSnap.exists()) {
-      niveauNom = niveauSnap.data().nom;
+      niveauNom = niveauSnap.data().name;
     }
 
     const matiereSnap = await getDoc(doc(db, "subjects", data.subject_id));
     if (matiereSnap.exists()) {
-      matiereNom = matiereSnap.data().nom;
+      matiereNom = matiereSnap.data().name;
     }
   } catch (error) {
     console.error("Erreur de mapping niveau/matière :", error);
@@ -37,5 +37,6 @@ export async function mapCourseWithNames(id: string, data: any): Promise<Course>
     description: data.description,
     niveau: niveauNom,
     matiere: matiereNom,
+    img: data.img || "", // <-- on récupère aussi l'image ici
   };
 }

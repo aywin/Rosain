@@ -16,9 +16,13 @@ export default function LoginForm() {
     e.preventDefault();
     setError("");
     try {
-      await signInWithEmailAndPassword(auth, form.email, form.password);
+      console.log("Tentative de connexion avec :", form.email, form.password);
+      const userCred = await signInWithEmailAndPassword(auth, form.email, form.password);
+      console.log("✅ Connecté :", userCred.user);
+
       router.push("/");
     } catch (err: any) {
+      console.error("❌ Erreur login :", err.code, err.message);
       setError("Email ou mot de passe incorrect.");
     }
   };

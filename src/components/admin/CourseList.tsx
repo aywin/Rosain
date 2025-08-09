@@ -42,8 +42,7 @@ export default function CourseList() {
   const getLevelName = (id: string) => levels.find(l => l.id === id)?.name || id;
   const getSubjectName = (id: string) => subjects.find(s => s.id === id)?.name || id;
   const getVideosForCourse = (courseId: string) =>
-  videos.filter(v => v.courseId === courseId);
-
+    videos.filter(v => v.courseId === courseId);
 
   const handleAdd = async (data: any) => {
     await addDoc(collection(db, "courses"), {
@@ -55,7 +54,8 @@ export default function CourseList() {
 
   const handleEdit = async (id: string, data: any) => {
     await updateDoc(doc(db, "courses", id), data);
-    setEditing(null); setEditInitial({});
+    setEditing(null);
+    setEditInitial({});
     await fetchList();
   };
 
@@ -75,7 +75,10 @@ export default function CourseList() {
                 onSubmit={data => handleEdit(c.id, data)}
                 initial={editInitial}
                 editMode
-                onCancel={() => { setEditing(null); setEditInitial({}); }}
+                onCancel={() => {
+                  setEditing(null);
+                  setEditInitial({});
+                }}
               />
             ) : (
               <>
@@ -84,6 +87,14 @@ export default function CourseList() {
                 <div className="text-xs text-gray-600">
                   Level: {getLevelName(c.level_id)} | Subject: {getSubjectName(c.subject_id)}
                 </div>
+
+                {/* Affichage de l'image si présente */}
+                {c.img && (
+                  <div className="mt-2">
+                    <img src={c.img} alt={`Image de ${c.title}`} className="max-w-xs rounded shadow" />
+                  </div>
+                )}
+
                 {/* Liste des vidéos associées */}
                 <div className="mt-2">
                   <span className="font-semibold text-sm">Videos :</span>
@@ -99,8 +110,18 @@ export default function CourseList() {
                   </ul>
                 </div>
                 <div>
-                  <button className="text-blue-700 underline mr-2" onClick={() => { setEditing(c.id); setEditInitial(c); }}>Edit</button>
-                  <button className="text-red-600 underline" onClick={() => handleDelete(c.id)}>Delete</button>
+                  <button
+                    className="text-blue-700 underline mr-2"
+                    onClick={() => {
+                      setEditing(c.id);
+                      setEditInitial(c);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button className="text-red-600 underline" onClick={() => handleDelete(c.id)}>
+                    Delete
+                  </button>
                 </div>
               </>
             )}

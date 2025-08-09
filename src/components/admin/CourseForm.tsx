@@ -1,7 +1,8 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { db } from "@/firebase";
-import { collection, getDocs, DocumentData } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 
 interface Level {
   id: string;
@@ -14,10 +15,22 @@ interface Subject {
 }
 
 interface CourseFormProps {
-  onSubmit: (data: { title: string; description: string; level_id: string; subject_id: string }) => Promise<void> | void;
-  initial?: { title?: string; description?: string; level_id?: string; subject_id?: string };
+  onSubmit: (data: {
+    title: string;
+    description: string;
+    level_id: string;
+    subject_id: string;
+    img?: string;
+  }) => Promise<void> | void;
+  initial?: {
+    title?: string;
+    description?: string;
+    level_id?: string;
+    subject_id?: string;
+    img?: string;
+  };
   editMode?: boolean;
-  onCancel?: () => void; // Rendu optionnel
+  onCancel?: () => void; // optionnel, pour annuler la modification
 }
 
 interface CourseFormState {
@@ -25,18 +38,27 @@ interface CourseFormState {
   description: string;
   level_id: string;
   subject_id: string;
+  img?: string;
 }
 
-export default function CourseForm({ onSubmit, initial = {}, editMode = false, onCancel }: CourseFormProps) {
+export default function CourseForm({
+  onSubmit,
+  initial = {},
+  editMode = false,
+  onCancel,
+}: CourseFormProps) {
   const [formState, setFormState] = useState<CourseFormState>({
     title: initial.title || "",
     description: initial.description || "",
     level_id: initial.level_id || "",
     subject_id: initial.subject_id || "",
+    img: initial.img || "",
   });
+
   const [levels, setLevels] = useState<Level[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
+  // Charger niveaux et matières au montage
   useEffect(() => {
     const fetchData = async () => {
       const levelsSnap = await getDocs(collection(db, "levels"));
@@ -47,33 +69,39 @@ export default function CourseForm({ onSubmit, initial = {}, editMode = false, o
     fetchData();
   }, []);
 
+  // Lorsqu'on passe en mode édition, synchroniser l'état du formulaire
   useEffect(() => {
     if (editMode) {
-      setFormState((prev) => ({
-        ...prev,
+      setFormState({
         title: initial.title || "",
         description: initial.description || "",
         level_id: initial.level_id || "",
         subject_id: initial.subject_id || "",
-      }));
+        img: initial.img || "",
+      });
     }
   }, [initial, editMode]);
 
+  // Gestion de la soumission du formulaire
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // validation basique
     if (!formState.title.trim() || !formState.level_id || !formState.subject_id) return;
     await onSubmit({
       title: formState.title,
       description: formState.description,
       level_id: formState.level_id,
       subject_id: formState.subject_id,
+      img: formState.img,
     });
+    // reset formulaire si on n'est pas en mode édition
     if (!editMode) {
       setFormState({
         title: "",
         description: "",
         level_id: "",
         subject_id: "",
+        img: "",
       });
     }
   };
@@ -113,13 +141,20 @@ export default function CourseForm({ onSubmit, initial = {}, editMode = false, o
         onChange={(e) => setFormState((prev) => ({ ...prev, subject_id: e.target.value }))}
         required
       >
-        <option value="">Sélectionner un sujet</option>
+        <option value="">Sélectionner une matière</option>
         {subjects.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
           </option>
         ))}
       </select>
+      <input
+        className="border px-3 py-2 rounded"
+        type="url"
+        placeholder="URL de l'image (optionnel)"
+        value={formState.img || ""}
+        onChange={(e) => setFormState((prev) => ({ ...prev, img: e.target.value }))}
+      />
       <div className="flex gap-2">
         <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
           {editMode ? "Sauvegarder" : "Ajouter"}

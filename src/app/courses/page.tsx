@@ -1,9 +1,11 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { mapCourseWithNames, Course } from "@/utils/mapCourse";
+import CourseCard from "@/components/course/CourseCard";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -23,27 +25,18 @@ export default function CoursesPage() {
   }, []);
 
   return (
-    <div className="max-w-3xl mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-8">Catalogue des cours</h1>
+    <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-bold mb-8 text-center">Catalogue des cours</h1>
+
       {loading ? (
-        <div>Chargement...</div>
+        <div className="text-center">Chargement...</div>
       ) : courses.length === 0 ? (
-        <div>Aucun cours disponible.</div>
+        <div className="text-center">Aucun cours disponible.</div>
       ) : (
-        <ul>
-          {courses.map((c) => (
-            <li key={c.id} className="mb-6 p-4 bg-white rounded shadow">
-              <div className="font-bold text-lg mb-1">{c.titre}</div>
-              <div className="mb-1 text-gray-700">
-                Niveau : <span className="font-semibold">{c.niveau}</span> | Matière :{" "}
-                <span className="font-semibold">{c.matiere}</span>
-              </div>
-              <button
-                className="bg-blue-700 text-white px-3 py-1 rounded"
-                onClick={() => router.push(`/courses/${c.id}`)}
-              >
-                Voir le cours
-              </button>
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {courses.map((course) => (
+            <li key={course.id} className="w-full">
+              <CourseCard course={course} />
             </li>
           ))}
         </ul>

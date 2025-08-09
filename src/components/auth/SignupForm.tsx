@@ -1,4 +1,4 @@
-"use client";
+"use client"; 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
@@ -17,7 +17,10 @@ export default function SignupForm() {
     e.preventDefault();
     setError("");
     try {
+      console.log("Tentative d'inscription avec :", form.email, form.password);
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      console.log("✅ Utilisateur créé :", userCred.user);
+
       const userId = userCred.user.uid;
       await setDoc(doc(db, "users", userId), {
         nom: form.nom,
@@ -27,8 +30,11 @@ export default function SignupForm() {
         statut_paiement: false,
         id_ecole: null
       });
+      console.log("✅ Document Firestore ajouté pour :", userId);
+
       router.push("/");
     } catch (err: any) {
+      console.error("❌ Erreur inscription :", err.code, err.message);
       setError(err.message);
     }
   };
