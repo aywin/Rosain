@@ -31,6 +31,8 @@ export default function TutoPage() {
   const router = useRouter();
 
   const courseId = Array.isArray(id) ? id[0] : id;
+
+  // États
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
@@ -39,55 +41,95 @@ export default function TutoPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // Vérifier l'inscription de l'utilisateur
+  // Vérifier l'inscription de l'utilisateur au cours
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (user) => {
-      if (!user || !courseId) return setLoading(false);
-      const q = query(
-        collection(db, "enrollments"),
-        where("id_user", "==", user.uid),
-        where("id_course", "==", courseId)
-      );
-      const snap = await getDocs(q);
-      setAllowed(!snap.empty);
+    if (!courseId) {
       setLoading(false);
+      return;
+    }
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        setAllowed(false);
+        setLoading(false);
+        return;
+      }
+      try {
+        const q = query(
+          collection(db, "enrollments"),
+          where("id_user", "==", user.uid),
+          where("id_course", "==", courseId)
+        );
+        const snap = await getDocs(q);
+        setAllowed(!snap.empty);
+      } catch (error) {
+        console.error("Erreur lors de la vérification de l'inscription :", error);
+        setAllowed(false);
+      } finally {
+        setLoading(false);
+      }
     });
     return () => unsub();
   }, [courseId]);
 
-  // Charger le cours
+  // Charger le cours avec noms lisibles niveau/matière
   useEffect(() => {
     if (!courseId) return;
-    getDoc(doc(db, "courses", courseId)).then(async (snap) => {
-      if (snap.exists()) setCourse(await mapCourseWithNames(snap.id, snap.data()));
-    });
+    getDoc(doc(db, "courses", courseId))
+      .then(async (snap) => {
+        if (snap.exists()) {
+          const mappedCourse = await mapCourseWithNames(snap.id, snap.data());
+          setCourse(mappedCourse);
+        } else {
+          setCourse(null);
+        }
+      })
+      .catch((error) => {
+        console.error("Erreur chargement cours :", error);
+        setCourse(null);
+      });
   }, [courseId]);
 
-  // Charger les vidéos
+  // Charger les vidéos triées par ordre
   useEffect(() => {
     if (!courseId) return;
     const q = query(collection(db, "videos"), where("courseId", "==", courseId));
-    getDocs(q).then((snap) => {
-      const vids = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
-        .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
-      setVideos(vids);
-    });
+    getDocs(q)
+      .then((snap) => {
+        const vids = snap.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
+          .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+        setVideos(vids);
+        // Sélectionner la première vidéo automatiquement
+        if (vids.length > 0) setCurrent(0);
+      })
+      .catch((error) => {
+        console.error("Erreur chargement vidéos :", error);
+        setVideos([]);
+      });
   }, [courseId]);
 
-  if (!courseId) return <div className="p-12 text-red-500">ID de cours manquant.</div>;
+  if (!courseId)
+    return <div className="p-12 text-red-500">ID de cours manquant.</div>;
+
   if (loading) return <div className="p-12">Chargement…</div>;
+
   if (!allowed)
     return (
       <div className="p-12 text-red-500">
         Accès refusé : non inscrit.
-        <button className="ml-4 underline text-blue-700" onClick={() => router.push("/mycourses")}>
+        <button
+          className="ml-4 underline text-blue-700"
+          onClick={() => router.push("/mycourses")}
+        >
           Retour à mes cours
         </button>
       </div>
     );
+
   if (!course) return <div className="p-12">Cours introuvable.</div>;
-  if (videos.length === 0) return <div className="p-12">Aucune vidéo disponible.</div>;
+
+  if (videos.length === 0)
+    return <div className="p-12">Aucune vidéo disponible.</div>;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
@@ -109,7 +151,10 @@ export default function TutoPage() {
 
       {/* Overlay pour mobile */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* Contenu principal */}
@@ -117,8 +162,8 @@ export default function TutoPage() {
         <CourseHeader
           titre={course.titre}
           niveau={course.niveau}
-          matiere={course.matiere}
-          description={course.description}
+          
+          
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
         />
 
@@ -126,14 +171,23 @@ export default function TutoPage() {
           {current !== null && videos[current] ? (
             <>
               <VideoPlayer
-                url={videos[current].url}
-                title={videos[current].title}
-                onAssistantClick={() => setShowAssistant(true)}
-              />
+  url={videos[current].url}
+  title={videos[current].title}
+  onAssistantClick={() => setShowAssistant(true)}
+  onNext={() => {
+    // passer à la vidéo suivante si elle existe
+    if (current !== null && current + 1 < videos.length) {
+      setCurrent(current + 1);
+    }
+  }}
+/>
+
               <VideoTranscript />
             </>
           ) : (
-            <div className="text-gray-500 mt-12 text-lg">Veuillez sélectionner une vidéo.</div>
+            <div className="text-gray-500 mt-12 text-lg">
+              Veuillez sélectionner une vidéo.
+            </div>
           )}
         </div>
       </div>

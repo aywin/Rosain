@@ -1,13 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useState } from 'react';
+import { deleteDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/firebase';
-
-interface Props {
-  courseId: string;
-  refresh: boolean;
-}
 
 interface Video {
   id: string;
@@ -16,46 +11,95 @@ interface Video {
   courseId: string;
 }
 
-const VideoList = ({ courseId, refresh }: Props) => {
-  const [videos, setVideos] = useState<Video[]>([]);
+interface VideoListProps {
+  videos: Video[];
+  courseId: string;
+  refreshVideos: (courseId: string) => void;
+}
 
-  const fetchVideos = async () => {
-    const q = query(collection(db, 'videos'), where('courseId', '==', courseId));
-    const snapshot = await getDocs(q);
-    const data: Video[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<Video, 'id'>),
-    }));
-    setVideos(data);
+export default function VideoList({ videos, courseId, refreshVideos }: VideoListProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Supprimer cette vidéo ?')) {
+      await deleteDoc(doc(db, 'videos', id));
+      refreshVideos(courseId);
+    }
   };
 
-  useEffect(() => {
-    if (courseId) fetchVideos();
-  }, [courseId, refresh]);
+  const handleEdit = (video: Video) => {
+    setEditingId(video.id);
+    setEditTitle(video.title);
+    setEditUrl(video.url);
+  };
 
-  if (!courseId) return null;
+  const handleSave = async () => {
+    if (editingId) {
+      await updateDoc(doc(db, 'videos', editingId), {
+        title: editTitle,
+        url: editUrl,
+      });
+      setEditingId(null);
+      refreshVideos(courseId);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {videos.length > 0 ? (
-        videos.map((video) => (
-          <div key={video.id} className="border p-4 rounded">
-            <h3 className="font-semibold">{video.title}</h3>
-            <div className="aspect-video mt-2">
-              <iframe
-                className="w-full h-full"
-                src={video.url.replace('watch?v=', 'embed/')}
-                title={video.title}
-                allowFullScreen
-              ></iframe>
-            </div>
-          </div>
-        ))
-      ) : (
-        <p className="text-gray-500">Aucune vidéo pour ce cours.</p>
+      {videos.map((video) => (
+        <div key={video.id} className="border p-4 rounded shadow-sm space-y-2">
+          {editingId === video.id ? (
+            <>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="border p-1 w-full rounded"
+              />
+              <input
+                type="text"
+                value={editUrl}
+                onChange={(e) => setEditUrl(e.target.value)}
+                className="border p-1 w-full rounded"
+              />
+              <div className="flex gap-2 mt-2">
+                <button onClick={handleSave} className="bg-green-500 text-white px-3 py-1 rounded">
+                  Sauvegarder
+                </button>
+                <button onClick={() => setEditingId(null)} className="bg-gray-400 text-white px-3 py-1 rounded">
+                  Annuler
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="font-bold text-lg">{video.title}</h3>
+              <div className="w-[300px] h-[170px]">
+                <iframe
+                  className="w-full h-full"
+                  src={video.url.replace('watch?v=', 'embed/')}
+                  title={video.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => handleEdit(video)} className="bg-blue-500 text-white px-3 py-1 rounded">
+                  Modifier
+                </button>
+                <button onClick={() => handleDelete(video.id)} className="bg-red-500 text-white px-3 py-1 rounded">
+                  Supprimer
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      {videos.length === 0 && courseId && (
+        <p className="text-gray-500">Aucune vidéo trouvée pour ce cours.</p>
       )}
     </div>
   );
-};
-
-export default VideoList;
+}

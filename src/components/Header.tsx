@@ -7,6 +7,7 @@ import { LogOut, User, Menu, X } from "lucide-react";
 import { auth, db } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import Image from "next/image";
 
 export default function Header() {
   const [user, setUser] = useState<{ nom: string; prenom: string; email: string } | null>(null);
@@ -62,9 +63,18 @@ export default function Header() {
   return (
     <header className="bg-pink-100 text-gray-800 shadow-md relative z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold text-pink-600 hover:text-pink-500">
-          🎓 TutosHub
-        </Link>
+        <Link href="/" className="flex items-center space-x-2">
+  <Image
+    src="/logo.jpg"   // fichier dans /public
+    alt="Logo Rosaine Academy"
+    width={40}        // largeur de l’image
+    height={40}       // hauteur de l’image
+    className="rounded-full" // optionnel (arrondi)
+  />
+  <span className="text-2xl font-bold text-pink-600 hover:text-pink-500">
+    Rosaine Academy
+  </span>
+</Link>
 
   <nav className="hidden md:flex space-x-6 font-medium">
   <Link href="/" className="hover:text-pink-500">Accueil</Link>

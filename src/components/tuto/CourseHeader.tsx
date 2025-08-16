@@ -6,16 +6,14 @@ import { Menu } from "lucide-react";
 interface CourseHeaderProps {
   titre: string;
   niveau: string;
-  matiere: string;
-  description?: string;
+  
+  
   onToggleSidebar?: () => void;
 }
 
 export default function CourseHeader({
   titre,
   niveau,
-  matiere,
-  description,
   onToggleSidebar,
 }: CourseHeaderProps) {
   const router = useRouter();
@@ -33,11 +31,8 @@ export default function CourseHeader({
       <div className="flex-1">
         <h1 className="text-2xl font-bold mb-1">{titre}</h1>
         <div className="text-gray-700 text-sm mb-1">
-          Niveau : <b>{niveau}</b> | Matière : <b>{matiere}</b>
+          <b>{niveau}</b>
         </div>
-        {description && (
-          <div className="text-gray-600 text-xs">{description}</div>
-        )}
       </div>
 
       <button

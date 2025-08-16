@@ -1,17 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 
-interface Props {
-  courseId: string;
-  onAdd: () => void;
+interface Course {
+  id: string;
+  title: string;
 }
 
-const VideoForm = ({ courseId, onAdd }: Props) => {
+interface VideoFormProps {
+  courses: Course[];
+  onVideoAdded: (courseId: string) => void;
+}
+
+export default function VideoForm({ courses, onVideoAdded }: VideoFormProps) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
+  const [courseId, setCourseId] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,9 +32,10 @@ const VideoForm = ({ courseId, onAdd }: Props) => {
         courseId,
         createdAt: serverTimestamp(),
       });
+
       setTitle('');
       setUrl('');
-      onAdd(); // Recharger la liste
+      onVideoAdded(courseId);
     } catch (error) {
       console.error('Erreur ajout vidéo :', error);
     } finally {
@@ -52,15 +59,25 @@ const VideoForm = ({ courseId, onAdd }: Props) => {
         value={url}
         onChange={(e) => setUrl(e.target.value)}
       />
+      <select
+        value={courseId}
+        onChange={(e) => setCourseId(e.target.value)}
+        className="border w-full p-2 rounded"
+      >
+        <option value="">-- Sélectionner un cours --</option>
+        {courses.map((course) => (
+          <option key={course.id} value={course.id}>
+            {course.title}
+          </option>
+        ))}
+      </select>
       <button
         type="submit"
         disabled={loading}
         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
-        {loading ? 'Ajout...' : 'Ajouter la vidéo'}
+        {loading ? 'Ajout en cours...' : 'Ajouter la vidéo'}
       </button>
     </form>
   );
-};
-
-export default VideoForm;
+}

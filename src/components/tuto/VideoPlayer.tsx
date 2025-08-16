@@ -1,111 +1,185 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import VideoControls from "./VideoControls";
+import ProgressBar from "./ProgressBar";
 
 interface VideoPlayerProps {
   url: string;
   title: string;
   onAssistantClick: () => void;
+  onNext: () => void;
+}
+
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
 }
 
 export default function VideoPlayer({
   url,
   title,
   onAssistantClick,
+  onNext,
 }: VideoPlayerProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [showQuestion, setShowQuestion] = useState(false);
-  const [hasAsked, setHasAsked] = useState(false);
+  const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
 
-  // Extrait l'ID vidéo
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   const getVideoId = (url: string) => {
     const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
     return match ? match[1] : null;
   };
-
   const videoId = getVideoId(url);
-  const embedUrl = videoId
-    ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}`
-    : url;
 
-  // Fonction pour envoyer un message de pause à l’iframe
-  const pauseVideo = () => {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: "command", func: "pauseVideo" }),
-      "*"
-    );
-  };
-
-  const playVideo = () => {
-    iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: "command", func: "playVideo" }),
-      "*"
-    );
-  };
-
-  // Lance le timer une seule fois
   useEffect(() => {
-    if (hasAsked || !videoId) return;
+    if (!videoId) return;
 
-    const timer = setTimeout(() => {
-      pauseVideo();
-      setShowQuestion(true);
-      setHasAsked(true);
-    }, 60000); // 1 minute
+    const onPlayerReady = (event: any) => {
+      playerRef.current = event.target;
+      const dur = playerRef.current?.getDuration?.();
+      if (dur) setDuration(dur);
+    };
 
-    return () => clearTimeout(timer);
-  }, [videoId, hasAsked]);
+    const onPlayerStateChange = (event: any) => {
+      const state = event.data;
 
-  const handleResponse = (understood: boolean) => {
-    if (understood) {
-      playVideo();
+      if (state === window.YT.PlayerState.PLAYING) {
+        setIsPlaying(true);
+        startProgressUpdate();
+      } else {
+        setIsPlaying(false);
+        stopProgressUpdate();
+      }
+
+      if (state === window.YT.PlayerState.ENDED) {
+        onNext();
+      }
+    };
+
+    const initPlayer = () => {
+      if (!containerRef.current || !videoId) return;
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+
+      new window.YT.Player(containerRef.current, {
+        videoId,
+        playerVars: {
+          modestbranding: 1,
+          rel: 0,
+          iv_load_policy: 3,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          playsinline: 1,
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+        },
+      });
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
     } else {
-      onAssistantClick(); // Ouvre l'assistant si non compris
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.body.appendChild(tag);
+      window.onYouTubeIframeAPIReady = initPlayer;
     }
-    setShowQuestion(false);
+
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+
+    return () => {
+      stopProgressUpdate();
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+    };
+  }, [videoId, onNext]);
+
+  const updateProgress = () => {
+    if (playerRef.current?.getCurrentTime) {
+      setCurrentTime(playerRef.current.getCurrentTime());
+    }
+    rafRef.current = requestAnimationFrame(updateProgress);
+  };
+
+  const startProgressUpdate = () => {
+    stopProgressUpdate();
+    rafRef.current = requestAnimationFrame(updateProgress);
+  };
+
+  const stopProgressUpdate = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  };
+
+  const handlePlayPause = () => {
+    if (!playerRef.current) return;
+    const state = playerRef.current.getPlayerState();
+    if (state === window.YT.PlayerState.PLAYING) playerRef.current.pauseVideo();
+    else playerRef.current.playVideo();
+  };
+
+  const handleSeekRelative = (seconds: number) => {
+    if (!playerRef.current?.seekTo) return;
+    let newTime = currentTime + seconds;
+    newTime = Math.max(0, Math.min(newTime, duration));
+    playerRef.current.seekTo(newTime, true);
+    setCurrentTime(newTime);
+  };
+
+  const handleSeekAbsolute = (time: number) => {
+    if (!playerRef.current?.seekTo) return;
+    playerRef.current.seekTo(time, true);
+    setCurrentTime(time);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center relative">
-      <iframe
-        ref={iframeRef}
-        className="w-[70%] aspect-video rounded-lg mt-6 shadow"
-        src={embedUrl}
-        title={title}
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      ></iframe>
+    <div className="flex flex-col items-center relative w-full max-w-4xl mx-auto">
+      <h2 className="text-xl font-semibold mb-4">{title}</h2>
 
-      {/* Question après 1 min */}
-      {showQuestion && (
-        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-20 text-white rounded-lg">
-          <p className="text-2xl mb-4">Tu as compris ?</p>
-          <div className="flex gap-4">
-            <button
-              className="bg-green-500 px-4 py-2 rounded"
-              onClick={() => handleResponse(true)}
-            >
-              Oui
-            </button>
-            <button
-              className="bg-red-500 px-4 py-2 rounded"
-              onClick={() => handleResponse(false)}
-            >
-              Non
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="w-[70%] flex justify-end mt-4">
-        <button
-          className="px-2 py-2 border rounded hover:bg-blue-700 hover:text-white transition"
-          onClick={onAssistantClick}
-        >
-          Ouvrir Assistant IA →
-        </button>
+      {/* Player */}
+      <div className="relative w-[70%] aspect-video rounded-lg overflow-hidden shadow-lg">
+        <div ref={containerRef} className="w-full h-full pointer-events-none" />
+        <div
+          className="absolute inset-0 z-10 cursor-pointer"
+          onClick={handlePlayPause}
+        />
       </div>
+
+      {/* Barre de progression */}
+      <ProgressBar
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={handleSeekAbsolute}
+      />
+
+      {/* Contrôles */}
+      <VideoControls
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        onPlayPause={handlePlayPause}
+        onSeekForward={() => handleSeekRelative(10)}
+        onSeekBackward={() => handleSeekRelative(-10)}
+        onNext={onNext}
+      />
+
+      {/* Bouton assistant */}
+      <button
+        onClick={onAssistantClick}
+        className="mt-4 self-end px-3 py-2 border rounded hover:bg-blue-600 hover:text-white transition"
+      >
+        Ouvrir Assistant IA →
+      </button>
     </div>
   );
 }
