@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
 import VideoForm from '@/components/admin/VideoForm';
 import VideoList from '@/components/admin/VideoList';
@@ -11,6 +11,7 @@ interface Video {
   title: string;
   url: string;
   courseId: string;
+  order?: number;
 }
 
 interface Course {
@@ -34,7 +35,11 @@ export default function AdminVideosPage() {
   const fetchVideos = async (id: string) => {
     setCourseId(id);
     if (!id) return;
-    const q = query(collection(db, 'videos'), where('courseId', '==', id));
+    const q = query(
+      collection(db, 'videos'),
+      where('courseId', '==', id),
+      orderBy('order', 'asc')
+    );
     const querySnapshot = await getDocs(q);
     setVideos(querySnapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Video, 'id'>) })));
   };

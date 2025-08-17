@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 
 interface Course {
@@ -18,11 +18,31 @@ export default function VideoForm({ courses, onVideoAdded }: VideoFormProps) {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [courseId, setCourseId] = useState('');
+  const [order, setOrder] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchNextOrder = async () => {
+      if (!courseId) {
+        setOrder('');
+        return;
+      }
+      const q = query(collection(db, 'videos'), where('courseId', '==', courseId));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const maxOrder = Math.max(...snapshot.docs.map((d) => d.data().order || 0));
+        setOrder(maxOrder + 1);
+      } else {
+        setOrder(1);
+      }
+    };
+
+    fetchNextOrder();
+  }, [courseId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !url || !courseId) return;
+    if (!title || !url || !courseId || !order) return;
 
     try {
       setLoading(true);
@@ -30,11 +50,13 @@ export default function VideoForm({ courses, onVideoAdded }: VideoFormProps) {
         title,
         url,
         courseId,
+        order,
         createdAt: serverTimestamp(),
       });
 
       setTitle('');
       setUrl('');
+      setOrder('');
       onVideoAdded(courseId);
     } catch (error) {
       console.error('Erreur ajout vidéo :', error);
@@ -71,6 +93,14 @@ export default function VideoForm({ courses, onVideoAdded }: VideoFormProps) {
           </option>
         ))}
       </select>
+      <input
+        type="number"
+        placeholder="Numéro d'ordre"
+        className="border w-full p-2 rounded"
+        value={order}
+        onChange={(e) => setOrder(Number(e.target.value))}
+        min={1}
+      />
       <button
         type="submit"
         disabled={loading}

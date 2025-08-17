@@ -1,105 +1,109 @@
 'use client';
 
-import { useState } from 'react';
-import { deleteDoc, updateDoc, doc } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase';
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from '@hello-pangea/dnd';
+import AdminVideoPlayer from './AdminVideoPlayer';
 
 interface Video {
   id: string;
   title: string;
   url: string;
   courseId: string;
+  order?: number;
 }
 
 interface VideoListProps {
   videos: Video[];
   courseId: string;
-  refreshVideos: (courseId: string) => void;
+  refreshVideos: (id: string) => void;
 }
 
 export default function VideoList({ videos, courseId, refreshVideos }: VideoListProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editUrl, setEditUrl] = useState('');
+  const [items, setItems] = useState<Video[]>(videos);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Supprimer cette vidéo ?')) {
-      await deleteDoc(doc(db, 'videos', id));
-      refreshVideos(courseId);
+  // 🔧 Sync interne quand les props changent
+  useEffect(() => {
+    setItems(videos || []);
+    setSelectedVideoId(null); // reset du lecteur si on change de cours
+  }, [videos, courseId]);
+
+  const handleOrderChange = async (id: string, newOrder: number) => {
+    const ref = doc(db, 'videos', id);
+    await updateDoc(ref, { order: newOrder });
+    refreshVideos(courseId);
+  };
+
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
+    const reordered = Array.from(items);
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+
+    const updates = reordered.map((v, index) => ({ ...v, order: index + 1 }));
+    setItems(updates);
+
+    for (const v of updates) {
+      const ref = doc(db, 'videos', v.id);
+      await updateDoc(ref, { order: v.order });
     }
+
+    refreshVideos(courseId);
   };
 
-  const handleEdit = (video: Video) => {
-    setEditingId(video.id);
-    setEditTitle(video.title);
-    setEditUrl(video.url);
-  };
-
-  const handleSave = async () => {
-    if (editingId) {
-      await updateDoc(doc(db, 'videos', editingId), {
-        title: editTitle,
-        url: editUrl,
-      });
-      setEditingId(null);
-      refreshVideos(courseId);
-    }
-  };
+  if (!courseId) return <p>Sélectionnez un cours pour voir ses vidéos</p>;
+  if (!videos.length) return <p>Aucune vidéo pour ce cours</p>;
 
   return (
-    <div className="space-y-6">
-      {videos.map((video) => (
-        <div key={video.id} className="border p-4 rounded shadow-sm space-y-2">
-          {editingId === video.id ? (
-            <>
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="border p-1 w-full rounded"
-              />
-              <input
-                type="text"
-                value={editUrl}
-                onChange={(e) => setEditUrl(e.target.value)}
-                className="border p-1 w-full rounded"
-              />
-              <div className="flex gap-2 mt-2">
-                <button onClick={handleSave} className="bg-green-500 text-white px-3 py-1 rounded">
-                  Sauvegarder
-                </button>
-                <button onClick={() => setEditingId(null)} className="bg-gray-400 text-white px-3 py-1 rounded">
-                  Annuler
-                </button>
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <Droppable droppableId="videos">
+        {(provided) => (
+          <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+            {items.map((video, index) => (
+              <div key={video.id}>
+                {/* Afficher le lecteur au-dessus de la vidéo cliquée */}
+                {selectedVideoId === video.id && <AdminVideoPlayer video={video} />}
+
+                <Draggable draggableId={video.id} index={index}>
+                  {(prov) => (
+                    <div
+                      ref={prov.innerRef}
+                      {...prov.draggableProps}
+                      {...prov.dragHandleProps}
+                      className="flex items-center justify-between border p-2 rounded bg-white shadow-sm"
+                    >
+                      <button
+                        onClick={() =>
+                          setSelectedVideoId(selectedVideoId === video.id ? null : video.id)
+                        }
+                        className="text-blue-600 hover:underline font-medium text-left flex-1"
+                      >
+                        {video.title}
+                      </button>
+
+                      <input
+                        type="number"
+                        value={video.order || ''}
+                        onChange={(e) => handleOrderChange(video.id, Number(e.target.value))}
+                        className="w-16 border p-1 rounded text-center ml-2"
+                      />
+                    </div>
+                  )}
+                </Draggable>
               </div>
-            </>
-          ) : (
-            <>
-              <h3 className="font-bold text-lg">{video.title}</h3>
-              <div className="w-[300px] h-[170px]">
-                <iframe
-                  className="w-full h-full"
-                  src={video.url.replace('watch?v=', 'embed/')}
-                  title={video.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                ></iframe>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <button onClick={() => handleEdit(video)} className="bg-blue-500 text-white px-3 py-1 rounded">
-                  Modifier
-                </button>
-                <button onClick={() => handleDelete(video.id)} className="bg-red-500 text-white px-3 py-1 rounded">
-                  Supprimer
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ))}
-      {videos.length === 0 && courseId && (
-        <p className="text-gray-500">Aucune vidéo trouvée pour ce cours.</p>
-      )}
-    </div>
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+    </DragDropContext>
   );
 }
