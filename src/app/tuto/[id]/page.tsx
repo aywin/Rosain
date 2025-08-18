@@ -23,7 +23,7 @@ interface Video {
   id: string;
   title: string;
   url: string;
-  ordre?: number;
+  order?: number;
 }
 
 export default function TutoPage() {
@@ -97,7 +97,7 @@ export default function TutoPage() {
       .then((snap) => {
         const vids = snap.docs
           .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
-          .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
         // Sélectionner la première vidéo automatiquement
         if (vids.length > 0) setCurrent(0);
