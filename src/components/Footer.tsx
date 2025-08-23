@@ -2,7 +2,7 @@ export default function Footer() {
   return (
     <footer className="bg-pink-100 text-gray-700 py-8 mt-12 border-t border-pink-200">
       <div className="container mx-auto px-4 text-center text-sm space-y-2">
-        <p className="text-pink-800 font-medium">
+        <p className="text-green-800 font-medium">
           &copy; {new Date().getFullYear()} TutosHub. Tous droits réservés.
         </p>
         <p>

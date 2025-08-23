@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { auth, db } from "@/firebase";
 import {
   collection,
@@ -10,6 +10,7 @@ import {
   where,
   doc,
   getDoc,
+  setDoc,
 } from "firebase/firestore";
 import { mapCourseWithNames } from "@/utils/mapCourse";
 
@@ -28,11 +29,8 @@ interface Video {
 
 export default function TutoPage() {
   const { id } = useParams();
-  const router = useRouter();
-
   const courseId = Array.isArray(id) ? id[0] : id;
 
-  // États
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [current, setCurrent] = useState<number | null>(null);
@@ -99,8 +97,14 @@ export default function TutoPage() {
           .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
-        // Sélectionner la première vidéo automatiquement
         if (vids.length > 0) setCurrent(0);
+
+        // Vérifier si le progress existe pour la première vidéo
+        auth.onAuthStateChanged(async (user) => {
+          if (user && vids.length > 0) {
+            await updateProgress(user.uid, courseId!, vids[0].order ?? 0, vids);
+          }
+        });
       })
       .catch((error) => {
         console.error("Erreur chargement vidéos :", error);
@@ -108,28 +112,44 @@ export default function TutoPage() {
       });
   }, [courseId]);
 
+  // Fonction pour mettre à jour la progression
+  const updateProgress = async (
+    userId: string,
+    courseId: string,
+    videoOrder: number,
+    allVideos: Video[]
+  ) => {
+    const orders = allVideos.map((v) => v.order ?? 0);
+    const firstOrder = Math.min(...orders);
+    const lastOrder = Math.max(...orders);
+
+    let status: "not_started" | "in_progress" | "done" = "in_progress";
+    if (videoOrder === firstOrder) status = "in_progress";
+    if (videoOrder === lastOrder) status = "done";
+
+    await setDoc(
+      doc(db, "progress", `${userId}_${courseId}`),
+      {
+        id_user: userId,
+        id_course: courseId,
+        status,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  };
+
   if (!courseId)
     return <div className="p-12 text-red-500">ID de cours manquant.</div>;
-
   if (loading) return <div className="p-12">Chargement…</div>;
-
   if (!allowed)
     return (
       <div className="p-12 text-red-500">
         Accès refusé : non inscrit.
-        <button
-          className="ml-4 underline text-blue-700"
-          onClick={() => router.push("/mycourses")}
-        >
-          Retour à mes cours
-        </button>
       </div>
     );
-
   if (!course) return <div className="p-12">Cours introuvable.</div>;
-
-  if (videos.length === 0)
-    return <div className="p-12">Aucune vidéo disponible.</div>;
+  if (videos.length === 0) return <div className="p-12">Aucune vidéo disponible.</div>;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
@@ -145,6 +165,10 @@ export default function TutoPage() {
           setCurrent={(i) => {
             setCurrent(i);
             setSidebarOpen(false);
+            // Update progress on video select
+            if (auth.currentUser) {
+              updateProgress(auth.currentUser.uid, courseId!, videos[i].order ?? 0, videos);
+            }
           }}
         />
       </div>
@@ -162,8 +186,6 @@ export default function TutoPage() {
         <CourseHeader
           titre={course.titre}
           niveau={course.niveau}
-          
-          
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
         />
 
@@ -171,17 +193,19 @@ export default function TutoPage() {
           {current !== null && videos[current] ? (
             <>
               <VideoPlayer
-  url={videos[current].url}
-  title={videos[current].title}
-  onAssistantClick={() => setShowAssistant(true)}
-  onNext={() => {
-    // passer à la vidéo suivante si elle existe
-    if (current !== null && current + 1 < videos.length) {
-      setCurrent(current + 1);
-    }
-  }}
-/>
-
+                url={videos[current].url}
+                title={videos[current].title}
+                onAssistantClick={() => setShowAssistant(true)}
+                onNext={() => {
+                  if (current !== null && current + 1 < videos.length) {
+                    setCurrent(current + 1);
+                    // Update progress sur vidéo suivante
+                    if (auth.currentUser) {
+                      updateProgress(auth.currentUser.uid, courseId!, videos[current + 1].order ?? 0, videos);
+                    }
+                  }
+                }}
+              />
               <VideoTranscript />
             </>
           ) : (

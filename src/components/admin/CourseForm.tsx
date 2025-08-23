@@ -21,6 +21,7 @@ interface CourseFormProps {
     level_id: string;
     subject_id: string;
     img?: string;
+    order: number;   // ✅ ajouté
   }) => Promise<void> | void;
   initial?: {
     title?: string;
@@ -28,9 +29,10 @@ interface CourseFormProps {
     level_id?: string;
     subject_id?: string;
     img?: string;
+    order?: number;  // ✅ ajouté
   };
   editMode?: boolean;
-  onCancel?: () => void; // optionnel, pour annuler la modification
+  onCancel?: () => void;
 }
 
 interface CourseFormState {
@@ -39,6 +41,7 @@ interface CourseFormState {
   level_id: string;
   subject_id: string;
   img?: string;
+  order: number;  // ✅ ajouté
 }
 
 export default function CourseForm({
@@ -53,23 +56,25 @@ export default function CourseForm({
     level_id: initial.level_id || "",
     subject_id: initial.subject_id || "",
     img: initial.img || "",
+    order: initial.order || 0,  // ✅ par défaut 0
   });
 
   const [levels, setLevels] = useState<Level[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
-  // Charger niveaux et matières au montage
+  // Charger niveaux et matières
   useEffect(() => {
     const fetchData = async () => {
       const levelsSnap = await getDocs(collection(db, "levels"));
       setLevels(levelsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Level)));
+
       const subjectsSnap = await getDocs(collection(db, "subjects"));
       setSubjects(subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subject)));
     };
     fetchData();
   }, []);
 
-  // Lorsqu'on passe en mode édition, synchroniser l'état du formulaire
+  // Synchroniser l'état en mode édition
   useEffect(() => {
     if (editMode) {
       setFormState({
@@ -78,14 +83,14 @@ export default function CourseForm({
         level_id: initial.level_id || "",
         subject_id: initial.subject_id || "",
         img: initial.img || "",
+        order: initial.order || 0,
       });
     }
   }, [initial, editMode]);
 
-  // Gestion de la soumission du formulaire
+  // Gestion soumission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // validation basique
     if (!formState.title.trim() || !formState.level_id || !formState.subject_id) return;
     await onSubmit({
       title: formState.title,
@@ -93,8 +98,9 @@ export default function CourseForm({
       level_id: formState.level_id,
       subject_id: formState.subject_id,
       img: formState.img,
+      order: formState.order,
     });
-    // reset formulaire si on n'est pas en mode édition
+
     if (!editMode) {
       setFormState({
         title: "",
@@ -102,6 +108,7 @@ export default function CourseForm({
         level_id: "",
         subject_id: "",
         img: "",
+        order: 0,
       });
     }
   };
@@ -155,6 +162,17 @@ export default function CourseForm({
         value={formState.img || ""}
         onChange={(e) => setFormState((prev) => ({ ...prev, img: e.target.value }))}
       />
+
+      {/* ✅ Champ ordre */}
+      <input
+        className="border px-3 py-2 rounded"
+        type="number"
+        placeholder="Ordre d'affichage"
+        value={formState.order}
+        onChange={(e) => setFormState((prev) => ({ ...prev, order: Number(e.target.value) }))}
+        min={0}
+      />
+
       <div className="flex gap-2">
         <button className="bg-blue-600 text-white px-4 py-2 rounded" type="submit">
           {editMode ? "Sauvegarder" : "Ajouter"}
