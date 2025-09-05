@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface Course {
   id: string;
@@ -17,11 +18,11 @@ interface Props {
 export default function CourseCard({ course, onEnroll }: Props) {
   const router = useRouter();
 
-  const handleClick = () => {
+  const handleMainButton = () => {
     if (!course.enrolled) {
       onEnroll?.();
     } else {
-      router.push(`/courses/${course.id}`);
+      router.push(`/tuto/${course.id}`);
     }
   };
 
@@ -37,7 +38,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
   );
 
   let cardClass = "bg-white border border-gray-200 text-gray-800";
-  let customStyle: React.CSSProperties = {}; // Pour Airbus Blue
+  let customStyle: React.CSSProperties = {};
 
   if (course.enrolled) {
     switch (course.progressStatus) {
@@ -60,7 +61,11 @@ export default function CourseCard({ course, onEnroll }: Props) {
             En cours
           </span>
         );
-        customStyle = { backgroundColor: "#00205B", borderColor: "#001A4D", color: "white" };
+        customStyle = {
+          backgroundColor: "#00205B",
+          borderColor: "#001A4D",
+          color: "white",
+        };
         break;
 
       case "done":
@@ -78,8 +83,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
 
   return (
     <div
-      onClick={handleClick}
-      className={`group cursor-pointer p-4 rounded-xl shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-56 h-[250px] ${cardClass}`}
+      className={`group p-4 rounded-xl shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-56 h-[280px] ${cardClass}`}
       style={customStyle}
     >
       {/* Image */}
@@ -100,12 +104,25 @@ export default function CourseCard({ course, onEnroll }: Props) {
       {/* Badge */}
       <div className="mb-3">{badge}</div>
 
-      {/* Bouton */}
+      {/* Bouton principal */}
       <button
-        className={`w-full py-2 rounded-lg font-semibold mt-auto ${buttonColor}`}
+  onClick={handleMainButton}
+  className={`w-full py-2 rounded-lg font-semibold transition
+    ${buttonColor} 
+    shadow hover:shadow-md active:scale-95 cursor-pointer
+    hover:brightness-90 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 mb-2`}
+>
+  {buttonLabel}
+</button>
+
+
+      {/* Lien détail */}
+      <Link
+        href={`/courses/${course.id}`}
+        className="text-sm text-blue-600 hover:underline"
       >
-        {buttonLabel}
-      </button>
+        Détail
+      </Link>
     </div>
   );
 }

@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, User, Menu, X } from "lucide-react";
+import { LogOut, User, Menu, X, Home, BookOpen, FileText, Video, HelpCircle } from "lucide-react";
+import { Settings, ClipboardList, Edit , Info} from "lucide-react";
+import { FileEdit, Sliders } from "lucide-react";
 import { auth, db } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Image from "next/image";
 
 export default function Header() {
-  const [user, setUser] = useState<{ nom: string; prenom: string; email: string } | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -28,12 +31,13 @@ export default function Header() {
             prenom: data.prenom,
             email: data.email,
           });
+          setRole(data.role?.trim() || null);
         }
       } else {
         setUser(null);
+        setRole(null);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -43,9 +47,7 @@ export default function Header() {
         setUserMenuOpen(false);
       }
     };
-    if (userMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    if (userMenuOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [userMenuOpen]);
 
@@ -63,31 +65,38 @@ export default function Header() {
   return (
     <header className="bg-pink-100 text-gray-800 shadow-md relative z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+        {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
-  <Image
-    src="/logo.jpg"   // fichier dans /public
-    alt="Logo Rosaine Academy"
-    width={40}        // largeur de l’image
-    height={40}       // hauteur de l’image
-    className="rounded-full" // optionnel (arrondi)
-  />
-  <span className="text-2xl font-bold text-pink-600 hover:text-pink-500">
-    Rosaine Academy
-  </span>
-</Link>
+          <Image src="/logo.jpg" alt="Logo Rosaine Academy" width={40} height={40} className="rounded-full" />
+          <span className="text-2xl font-bold text-pink-600 hover:text-pink-500">Rosaine Academy</span>
+        </Link>
 
-  <nav className="hidden md:flex space-x-6 font-medium">
-  <Link href="/" className="hover:text-pink-500">Accueil</Link>
+        {/* Navigation desktop */}
+<nav className="hidden md:flex space-x-6 font-medium items-center">
+  <Link href="/" className="flex items-center gap-1 hover:text-pink-500"><Home size={16} /> Accueil</Link>
+
   {user && (
     <>
-      <Link href="/courses" className="hover:text-pink-500">Cours</Link>
-      <Link href="/mycourses" className="hover:text-pink-500">Mes Cours</Link>
+      <Link href="/courses" className="flex items-center gap-1 hover:text-pink-500"><BookOpen size={16} /> Cours</Link>
+      <Link href="/mycourses" className="flex items-center gap-1 hover:text-pink-500"><ClipboardList size={16} /> Mes Cours</Link>
+      <Link href="/exo" className="flex items-center gap-1 hover:text-pink-500"><FileEdit size={16} /> Exercices</Link>
     </>
   )}
-  <Link href="/about" className="hover:text-pink-500">À propos</Link>
+
+  <Link href="/about" className="flex items-center gap-1 hover:text-pink-500"><Info size={16} /> À propos</Link>
+
+  {role === "superadmin" && (
+    <Link
+      href="/admin"
+      className="flex items-center gap-1 bg-[#1E293B] text-white px-3 py-1 rounded hover:bg-[#334155] transition"
+    >
+      <Settings size={16} /> Administration
+    </Link>
+  )}
 </nav>
 
 
+        {/* Menu utilisateur desktop */}
         <div className="hidden md:flex items-center space-x-4 relative">
           {user ? (
             <>
@@ -99,10 +108,7 @@ export default function Header() {
                 <span>{user.prenom} {user.nom}</span>
               </button>
               {userMenuOpen && (
-                <div
-                  ref={userMenuRef}
-                  className="absolute right-0 top-12 bg-white text-gray-800 shadow-md rounded w-48 z-50"
-                >
+                <div ref={userMenuRef} className="absolute right-0 top-12 bg-white text-gray-800 shadow-md rounded w-48 z-50">
                   <button
                     className="w-full text-left px-4 py-2 hover:bg-pink-50"
                     onClick={() => {
@@ -122,15 +128,13 @@ export default function Header() {
               )}
             </>
           ) : (
-            <Link
-              href="/login"
-              className="bg-white text-pink-700 border border-pink-300 px-3 py-1 rounded hover:bg-pink-50"
-            >
+            <Link href="/login" className="bg-white text-pink-700 border border-pink-300 px-3 py-1 rounded hover:bg-pink-50">
               Connexion
             </Link>
           )}
         </div>
 
+        {/* Mobile menu toggle */}
         <button
           onClick={toggleMobileMenu}
           className="md:hidden p-2 rounded text-pink-600 hover:bg-pink-200"
@@ -140,43 +144,46 @@ export default function Header() {
         </button>
       </div>
 
+      {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden bg-pink-50 px-4 py-4 space-y-4 text-gray-800">
           <Link href="/" onClick={closeMobileMenu} className="block hover:text-pink-500">Accueil</Link>
-{user && (
-  <>
-    <Link href="/courses" onClick={closeMobileMenu} className="block hover:text-pink-500">Cours</Link>
-    <Link href="/mycourses" onClick={closeMobileMenu} className="block hover:text-pink-500">Mes Cours</Link>
-  </>
-)}
-<Link href="/about" onClick={closeMobileMenu} className="block hover:text-pink-500">À propos</Link>
+          {user && (
+            <>
+              <Link href="/courses" onClick={closeMobileMenu} className="block hover:text-pink-500">Cours</Link>
+              <Link href="/mycourses" onClick={closeMobileMenu} className="block hover:text-pink-500">Mes Cours</Link>
+              <Link href="/exo" onClick={closeMobileMenu} className="block hover:text-pink-500">Exercices</Link>
+            </>
+          )}
+          <Link href="/about" onClick={closeMobileMenu} className="block hover:text-pink-500">À propos</Link>
+
+          {role === "superadmin" && (
+            <Link
+              href="/admin"
+              onClick={closeMobileMenu}
+              className="block bg-[#1E293B] text-white px-3 py-2 rounded hover:bg-[#334155] transition"
+            >
+              Administration
+            </Link>
+          )}
+
           {user ? (
             <>
               <button
-                onClick={() => {
-                  router.push("/profile");
-                  closeMobileMenu();
-                }}
+                onClick={() => { router.push("/profile"); closeMobileMenu(); }}
                 className="w-full text-left hover:text-pink-500"
               >
                 Mon profil
               </button>
               <button
-                onClick={() => {
-                  logout();
-                  closeMobileMenu();
-                }}
+                onClick={() => { logout(); closeMobileMenu(); }}
                 className="w-full text-left hover:text-pink-500"
               >
                 Se déconnecter
               </button>
             </>
           ) : (
-            <Link
-              href="/login"
-              onClick={closeMobileMenu}
-              className="block text-center bg-white text-pink-700 px-3 py-1 rounded hover:bg-pink-100"
-            >
+            <Link href="/login" onClick={closeMobileMenu} className="block text-center bg-white text-pink-700 px-3 py-1 rounded hover:bg-pink-100">
               Connexion
             </Link>
           )}

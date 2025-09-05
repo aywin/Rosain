@@ -3,26 +3,34 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/firebase"; // adapte ce chemin si besoin
-import CourseSection from "@/components/CourseSection"; // si tu veux afficher les cours aussi
+import { auth, db } from "@/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import CourseSection from "@/components/CourseSection";
+
 
 export default function HomePage() {
   const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser(u);
+        // récupérer le rôle depuis Firestore
+        const snap = await getDoc(doc(db, "users", u.uid));
+        if (snap.exists()) setRole(snap.data().role?.trim() || null);
+      } else {
+        setUser(null);
+        setRole(null);
+      }
     });
     return () => unsubscribe();
   }, []);
 
   const handleExploreCourses = () => {
-    if (user) {
-      router.push("/courses");
-    } else {
-      router.push("/login");
-    }
+    if (user) router.push("/courses");
+    else router.push("/login");
   };
 
   return (
@@ -50,29 +58,12 @@ export default function HomePage() {
         </h2>
         <div className="grid gap-8 md:grid-cols-3 max-w-6xl mx-auto">
           {[
-            {
-              emoji: "🎓",
-              title: "Cours de qualité",
-              desc: "Des vidéos claires et pédagogiques, créées par des enseignants passionnés.",
-            },
-            {
-              emoji: "🧠",
-              title: "Quiz interactifs",
-              desc: "Testez vos connaissances avec des quiz ludiques et instantanés.",
-            },
-            {
-              emoji: "📈",
-              title: "Suivi intelligent",
-              desc: "Votre progression est enregistrée pour vous proposer le bon contenu au bon moment.",
-            },
+            { emoji: "🎓", title: "Cours de qualité", desc: "Des vidéos claires et pédagogiques, créées par des enseignants passionnés." },
+            { emoji: "🧠", title: "Quiz interactifs", desc: "Testez vos connaissances avec des quiz ludiques et instantanés." },
+            { emoji: "📈", title: "Suivi intelligent", desc: "Votre progression est enregistrée pour vous proposer le bon contenu au bon moment." },
           ].map((item, i) => (
-            <div
-              key={i}
-              className="bg-white text-[oklch(30%_0.02_250)] p-6 rounded-2xl shadow-md border border-[oklch(92%_0.01_345)]"
-            >
-              <h3 className="text-xl font-semibold mb-2">
-                {item.emoji} {item.title}
-              </h3>
+            <div key={i} className="bg-white text-[oklch(30%_0.02_250)] p-6 rounded-2xl shadow-md border border-[oklch(92%_0.01_345)]">
+              <h3 className="text-xl font-semibold mb-2">{item.emoji} {item.title}</h3>
               <p className="text-sm leading-relaxed">{item.desc}</p>
             </div>
           ))}
@@ -82,13 +73,15 @@ export default function HomePage() {
       {/* Section des cours */}
       <CourseSection />
 
+  
+
       {/* Appel à l'action */}
       <section className="bg-[oklch(60%_0.14_350)] text-white py-16 px-6 text-center">
         <h2 className="text-2xl md:text-3xl font-bold mb-6">
           Commencez dès aujourd'hui à apprendre autrement
         </h2>
         <button
-          onClick={() => router.push("/register")}
+          onClick={() => router.push("/signup")}
           className="inline-block bg-white text-[oklch(60%_0.14_350)] px-6 py-3 rounded-xl font-semibold shadow hover:bg-opacity-90 transition"
         >
           Créer un compte

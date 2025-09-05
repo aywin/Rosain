@@ -14,6 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
+      <head>
+        {/* Favicon vide pour bloquer celui de Next.js */}
+        <link rel="icon" href="data:," />
+      </head>
       <body className="flex flex-col min-h-screen font-sans">
         <Header />
         <main className="flex-grow container mx-auto px-4 py-6">

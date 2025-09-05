@@ -144,3 +144,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+.katex-display {
+  margin: 0.25em 0 !important; /* réduit l’espace vertical */
+}
+
+.katex {
+  font-size: 1.05em; /* léger boost de lisibilité */
+}
