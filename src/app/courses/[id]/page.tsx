@@ -30,10 +30,11 @@ export default function CoursePage() {
   const router = useRouter();
   const params = useParams();
 
+  // ✅ Sécurisation de l'accès à params
   const courseId =
-    typeof params.id === "string"
+    typeof params?.id === "string"
       ? params.id
-      : Array.isArray(params.id) && params.id.length > 0
+      : Array.isArray(params?.id) && params.id.length > 0
       ? params.id[0]
       : undefined;
 
