@@ -32,7 +32,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
   let buttonLabel = "S'inscrire";
   let buttonColor = "bg-gray-500 text-white";
   let badge = (
-    <span className="px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-600">
+    <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-200 text-gray-600">
       Nouveau
     </span>
   );
@@ -46,7 +46,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
         buttonLabel = "Commencer";
         buttonColor = "bg-white text-pink-800";
         badge = (
-          <span className="px-2 py-0.5 text-xs rounded bg-white text-pink-800">
+          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-pink-800">
             Non commencé
           </span>
         );
@@ -57,7 +57,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
         buttonLabel = "Continuer";
         buttonColor = "bg-white text-[#00205B]";
         badge = (
-          <span className="px-2 py-0.5 text-xs rounded bg-white text-[#00205B]">
+          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-[#00205B]">
             En cours
           </span>
         );
@@ -72,7 +72,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
         buttonLabel = "Revoir";
         buttonColor = "bg-white text-green-800";
         badge = (
-          <span className="px-2 py-0.5 text-xs rounded bg-white text-green-800">
+          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-green-800">
             Terminé
           </span>
         );
@@ -83,11 +83,11 @@ export default function CourseCard({ course, onEnroll }: Props) {
 
   return (
     <div
-      className={`group p-4 rounded-xl shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-56 h-[280px] ${cardClass}`}
+      className={`group p-3 rounded-lg shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-44 h-[240px] ${cardClass}`}
       style={customStyle}
     >
       {/* Image */}
-      <div className="mb-3 h-24 w-24 overflow-hidden rounded-full bg-gray-50 border">
+      <div className="mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-50 border">
         <img
           src={course.img && course.img.trim() !== "" ? course.img : defaultImgUrl}
           alt={course.titre}
@@ -97,29 +97,28 @@ export default function CourseCard({ course, onEnroll }: Props) {
       </div>
 
       {/* Titre */}
-      <h3 className="text-sm font-semibold mb-2 text-center line-clamp-2">
+      <h3 className="text-xs font-semibold mb-1 text-center line-clamp-2">
         {course.titre}
       </h3>
 
       {/* Badge */}
-      <div className="mb-3">{badge}</div>
+      <div className="mb-2">{badge}</div>
 
       {/* Bouton principal */}
       <button
-  onClick={handleMainButton}
-  className={`w-full py-2 rounded-lg font-semibold transition
-    ${buttonColor} 
-    shadow hover:shadow-md active:scale-95 cursor-pointer
-    hover:brightness-90 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 mb-2`}
->
-  {buttonLabel}
-</button>
-
+        onClick={handleMainButton}
+        className={`w-full py-1.5 rounded-md text-xs font-semibold transition
+          ${buttonColor} 
+          shadow hover:shadow-md active:scale-95 cursor-pointer
+          hover:brightness-90 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 mb-1`}
+      >
+        {buttonLabel}
+      </button>
 
       {/* Lien détail */}
       <Link
         href={`/courses/${course.id}`}
-        className="text-sm text-blue-600 hover:underline"
+        className="text-xs text-blue-600 hover:underline"
       >
         Détail
       </Link>

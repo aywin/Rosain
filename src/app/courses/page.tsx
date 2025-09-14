@@ -12,6 +12,7 @@ import {
 import { db, auth } from "@/firebase";
 import { mapCourseWithNames } from "@/utils/mapCourse";
 import CourseCard from "@/components/course/CourseCard";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 
 interface CourseWithStatus {
   id: string;
@@ -29,8 +30,9 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<CourseWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [showMore, setShowMore] = useState<Record<string, boolean>>({});
 
-  // récupérer utilisateur
+  // Récupérer utilisateur
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) setUserId(user.uid);
@@ -39,7 +41,7 @@ export default function CoursesPage() {
     return () => unsubscribe();
   }, []);
 
-  // récupérer cours enrichis
+  // Récupérer cours enrichis
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -55,7 +57,6 @@ export default function CoursesPage() {
           let progressStatus: "not_started" | "in_progress" | "done" = "not_started";
 
           if (userId) {
-            // vérifier inscription
             const qEnroll = query(
               collection(db, "enrollments"),
               where("id_user", "==", userId),
@@ -64,7 +65,6 @@ export default function CoursesPage() {
             const enrollSnap = await getDocs(qEnroll);
             enrolled = !enrollSnap.empty;
 
-            // vérifier progression
             const qProgress = query(
               collection(db, "progress"),
               where("id_user", "==", userId),
@@ -72,8 +72,7 @@ export default function CoursesPage() {
             );
             const progressSnap = await getDocs(qProgress);
             if (!progressSnap.empty) {
-              const data = progressSnap.docs[0].data();
-              progressStatus = data.status || "not_started";
+              progressStatus = progressSnap.docs[0].data().status || "not_started";
             }
           }
 
@@ -90,7 +89,7 @@ export default function CoursesPage() {
           });
         }
 
-        // trier par niveau → matière → order
+        // Tri par niveau → matière → order
         enriched.sort((a, b) => {
           if (a.niveau !== b.niveau) return a.niveau.localeCompare(b.niveau);
           if (a.matiere !== b.matiere) return a.matiere.localeCompare(b.matiere);
@@ -127,10 +126,29 @@ export default function CoursesPage() {
     }
   };
 
-  if (loading) return <p className="p-12">Chargement des cours…</p>;
-  if (courses.length === 0) return <p className="p-12">Aucun cours disponible.</p>;
+  const toggleShowMore = (matiere: string) => {
+    setShowMore((prev) => ({
+      ...prev,
+      [matiere]: !prev[matiere],
+    }));
+  };
 
-  // regroupement niveau → matière
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-lg font-medium text-gray-600 animate-pulse">
+          Chargement des cours…
+        </p>
+      </div>
+    );
+  if (courses.length === 0)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-lg font-medium text-gray-600">Aucun cours disponible.</p>
+      </div>
+    );
+
+  // Regroupement niveau → matière
   const grouped: Record<string, Record<string, CourseWithStatus[]>> = {};
   courses.forEach((c) => {
     if (!grouped[c.niveau]) grouped[c.niveau] = {};
@@ -139,31 +157,53 @@ export default function CoursesPage() {
   });
 
   return (
-    <div className="p-6 space-y-12">
+    <div className="p-6 sm:p-8 lg:p-12 bg-gray-50 min-h-screen">
       {Object.entries(grouped).map(([niveau, matieres]) => (
-        <section key={niveau}>
-          {/* Section niveau */}
-          <h2 className="text-3xl font-bold text-blue-700 mb-6 border-b pb-2">
+        <section key={niveau} className="mb-12">
+          {/* Niveau */}
+          <h2 className="text-4xl font-extrabold text-blue-800 mb-6 pb-3 border-b-2 border-blue-200">
             {niveau}
           </h2>
 
           {Object.entries(matieres).map(([matiere, coursList]) => (
-            <div key={matiere} className="mb-10">
-              {/* Section matière */}
-              <h3 className="text-2xl font-semibold text-gray-800 mb-4">
+            <div
+              key={matiere}
+              className="mb-10 p-4 rounded-xl bg-gray-100"
+            >
+              {/* Matière */}
+              <h3 className="text-2xl font-semibold text-gray-900 mb-6">
                 {matiere}
               </h3>
 
-              {/* Liste cours bien structurée */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {coursList.map((course) => (
-                  <CourseCard
-                    key={course.id}
-                    course={course}
-                    onEnroll={() => handleEnroll(course.id)}
-                  />
-                ))}
+              {/* Grille responsive, max 5 cartes par ligne */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {(showMore[matiere] ? coursList : coursList.slice(0, 5)).map(
+                  (course) => (
+                    <CourseCard
+                      key={course.id}
+                      course={course}
+                      onEnroll={() => handleEnroll(course.id)}
+                    />
+                  )
+                )}
               </div>
+
+              {/* Bouton "Voir plus / Voir moins" */}
+              {coursList.length > 5 && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => toggleShowMore(matiere)}
+                    className="mt-6 flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-all duration-300"
+                  >
+                    {showMore[matiere] ? "Voir moins" : "Voir plus"}
+                    {showMore[matiere] ? (
+                      <ChevronUpIcon className="ml-2 h-5 w-5" />
+                    ) : (
+                      <ChevronDownIcon className="ml-2 h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </section>

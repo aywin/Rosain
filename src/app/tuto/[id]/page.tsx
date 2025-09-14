@@ -25,6 +25,7 @@ interface Video {
   title: string;
   url: string;
   order?: number;
+  quizzes?: any[];
 }
 
 export default function TutoPage() {
@@ -33,18 +34,15 @@ export default function TutoPage() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
-  const [current, setCurrent] = useState<number | null>(null);
+  const [current, setCurrent] = useState<number | null>(0);
   const [videos, setVideos] = useState<Video[]>([]);
   const [course, setCourse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // Vérifier l'inscription de l'utilisateur au cours
+  // Vérifier l'inscription
   useEffect(() => {
-    if (!courseId) {
-      setLoading(false);
-      return;
-    }
+    if (!courseId) return;
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         setAllowed(false);
@@ -60,7 +58,7 @@ export default function TutoPage() {
         const snap = await getDocs(q);
         setAllowed(!snap.empty);
       } catch (error) {
-        console.error("Erreur lors de la vérification de l'inscription :", error);
+        console.error(error);
         setAllowed(false);
       } finally {
         setLoading(false);
@@ -69,7 +67,7 @@ export default function TutoPage() {
     return () => unsub();
   }, [courseId]);
 
-  // Charger le cours avec noms lisibles niveau/matière
+  // Charger le cours
   useEffect(() => {
     if (!courseId) return;
     getDoc(doc(db, "courses", courseId))
@@ -82,37 +80,57 @@ export default function TutoPage() {
         }
       })
       .catch((error) => {
-        console.error("Erreur chargement cours :", error);
+        console.error(error);
         setCourse(null);
       });
   }, [courseId]);
 
-  // Charger les vidéos triées par ordre
+  // Charger les vidéos et leurs quiz
   useEffect(() => {
     if (!courseId) return;
-    const q = query(collection(db, "videos"), where("courseId", "==", courseId));
-    getDocs(q)
-      .then((snap) => {
-        const vids = snap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() } as Video))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const loadVideosAndQuizzes = async () => {
+      try {
+        const videoQuery = query(
+          collection(db, "videos"),
+          where("courseId", "==", courseId)
+        );
+        const videoSnap = await getDocs(videoQuery);
+
+        const vids: Video[] = await Promise.all(
+          videoSnap.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const quizQuery = query(
+              collection(db, "quizzes"),
+              where("videoId", "==", docSnap.id)
+            );
+            const quizSnap = await getDocs(quizQuery);
+            const quizzes = quizSnap.docs.map((q) => ({
+              id: q.id,
+              ...q.data(),
+            }));
+
+            return {
+              id: docSnap.id,
+              title: data.title,
+              url: data.url,
+              order: data.order ?? 0,
+              quizzes,
+            } as Video;
+          })
+        );
+
+        vids.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
         if (vids.length > 0) setCurrent(0);
-
-        // Vérifier si le progress existe pour la première vidéo
-        auth.onAuthStateChanged(async (user) => {
-          if (user && vids.length > 0) {
-            await updateProgress(user.uid, courseId!, vids[0].order ?? 0, vids);
-          }
-        });
-      })
-      .catch((error) => {
-        console.error("Erreur chargement vidéos :", error);
+      } catch (error) {
+        console.error(error);
         setVideos([]);
-      });
+      }
+    };
+    loadVideosAndQuizzes();
   }, [courseId]);
 
-  // Fonction pour mettre à jour la progression
+  // Mettre à jour la progression
   const updateProgress = async (
     userId: string,
     courseId: string,
@@ -139,17 +157,11 @@ export default function TutoPage() {
     );
   };
 
-  if (!courseId)
-    return <div className="p-12 text-red-500">ID de cours manquant.</div>;
+  if (!courseId) return <div className="p-12 text-red-500">ID manquant</div>;
   if (loading) return <div className="p-12">Chargement…</div>;
-  if (!allowed)
-    return (
-      <div className="p-12 text-red-500">
-        Accès refusé : non inscrit.
-      </div>
-    );
-  if (!course) return <div className="p-12">Cours introuvable.</div>;
-  if (videos.length === 0) return <div className="p-12">Aucune vidéo disponible.</div>;
+  if (!allowed) return <div className="p-12 text-red-500">Accès refusé</div>;
+  if (!course) return <div className="p-12">Cours introuvable</div>;
+  if (videos.length === 0) return <div className="p-12">Aucune vidéo</div>;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
@@ -165,15 +177,19 @@ export default function TutoPage() {
           setCurrent={(i) => {
             setCurrent(i);
             setSidebarOpen(false);
-            // Update progress on video select
             if (auth.currentUser) {
-              updateProgress(auth.currentUser.uid, courseId!, videos[i].order ?? 0, videos);
+              updateProgress(
+                auth.currentUser.uid,
+                courseId!,
+                videos[i].order ?? 0,
+                videos
+              );
             }
           }}
         />
       </div>
 
-      {/* Overlay pour mobile */}
+      {/* Overlay mobile */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-20 lg:hidden"
@@ -181,7 +197,7 @@ export default function TutoPage() {
         />
       )}
 
-      {/* Contenu principal */}
+      {/* Contenu */}
       <div className="flex-1 flex flex-col bg-blue-100 relative overflow-y-auto">
         <CourseHeader
           titre={course.titre}
@@ -195,16 +211,23 @@ export default function TutoPage() {
               <VideoPlayer
                 url={videos[current].url}
                 title={videos[current].title}
+                courseId={courseId!}                    // <-- ID du cours
+                videoIdFirestore={videos[current].id}   // <-- ID Firestore de la vidéo
                 onAssistantClick={() => setShowAssistant(true)}
                 onNext={() => {
                   if (current !== null && current + 1 < videos.length) {
                     setCurrent(current + 1);
-                    // Update progress sur vidéo suivante
                     if (auth.currentUser) {
-                      updateProgress(auth.currentUser.uid, courseId!, videos[current + 1].order ?? 0, videos);
+                      updateProgress(
+                        auth.currentUser.uid,
+                        courseId!,
+                        videos[current + 1].order ?? 0,
+                        videos
+                      );
                     }
                   }
                 }}
+                quizzes={videos[current].quizzes}
               />
               <VideoTranscript />
             </>
@@ -216,7 +239,7 @@ export default function TutoPage() {
         </div>
       </div>
 
-      {/* Assistant Panel */}
+      {/* Assistant */}
       {showAssistant && (
         <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full z-40 shadow-lg">
           <AssistantPanel onClose={() => setShowAssistant(false)} />

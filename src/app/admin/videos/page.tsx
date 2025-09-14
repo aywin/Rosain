@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import VideoForm from '@/components/admin/VideoForm';
 import VideoList from '@/components/admin/VideoList';
@@ -24,24 +24,43 @@ export default function AdminVideosPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState('');
 
+  // 🔄 Charger la liste des cours
   useEffect(() => {
     const fetchCourses = async () => {
-      const snapshot = await getDocs(collection(db, 'courses'));
-      setCourses(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Course, 'id'>) })));
+      try {
+        const snapshot = await getDocs(collection(db, 'courses'));
+        setCourses(
+          snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<Course, 'id'>),
+          }))
+        );
+      } catch (err) {
+        console.error('Erreur chargement cours :', err);
+      }
     };
     fetchCourses();
   }, []);
 
+  // 🔄 Charger les vidéos d’un cours sélectionné
   const fetchVideos = async (id: string) => {
     setCourseId(id);
     if (!id) return;
-    const q = query(
-      collection(db, 'videos'),
-      where('courseId', '==', id),
-      orderBy('order', 'asc')
-    );
-    const querySnapshot = await getDocs(q);
-    setVideos(querySnapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Video, 'id'>) })));
+    try {
+      const snapshot = await getDocs(collection(db, 'videos'));
+      const filtered = snapshot.docs
+        .map((doc, index) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Video, 'id'>),
+          order: (doc.data() as Video).order ?? index + 1, // gérer absence de order
+        }))
+        .filter((v) => v.courseId === id)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)); // tri côté client
+
+      setVideos(filtered);
+    } catch (err) {
+      console.error('Erreur chargement vidéos :', err);
+    }
   };
 
   return (
@@ -71,6 +90,7 @@ export default function AdminVideosPage() {
           ))}
         </select>
 
+        {/* La liste ne recharge plus les vidéos après chaque update */}
         <VideoList videos={videos} courseId={courseId} refreshVideos={fetchVideos} />
       </div>
     </div>

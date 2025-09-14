@@ -21,7 +21,7 @@ interface CourseFormProps {
     level_id: string;
     subject_id: string;
     img?: string;
-    order: number;   // ✅ ajouté
+    order: number;
   }) => Promise<void> | void;
   initial?: {
     title?: string;
@@ -29,7 +29,7 @@ interface CourseFormProps {
     level_id?: string;
     subject_id?: string;
     img?: string;
-    order?: number;  // ✅ ajouté
+    order?: number;
   };
   editMode?: boolean;
   onCancel?: () => void;
@@ -41,7 +41,7 @@ interface CourseFormState {
   level_id: string;
   subject_id: string;
   img?: string;
-  order: number;  // ✅ ajouté
+  order: number;
 }
 
 export default function CourseForm({
@@ -56,7 +56,7 @@ export default function CourseForm({
     level_id: initial.level_id || "",
     subject_id: initial.subject_id || "",
     img: initial.img || "",
-    order: initial.order || 0,  // ✅ par défaut 0
+    order: initial.order || 0,
   });
 
   const [levels, setLevels] = useState<Level[]>([]);
@@ -88,10 +88,34 @@ export default function CourseForm({
     }
   }, [initial, editMode]);
 
-  // Gestion soumission
+  // Calcul automatique de l'ordre disponible
+  useEffect(() => {
+    const fetchNextOrder = async () => {
+      if (!formState.level_id || !formState.subject_id) return;
+
+      const snap = await getDocs(collection(db, "courses"));
+      const filtered = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .filter(
+          (c) =>
+            c.level_id === formState.level_id &&
+            c.subject_id === formState.subject_id
+        );
+
+      const maxOrder = filtered.length ? Math.max(...filtered.map((c) => c.order || 0)) : 0;
+
+      setFormState((prev) => ({ ...prev, order: maxOrder + 1 }));
+    };
+
+    if (!editMode) {
+      fetchNextOrder();
+    }
+  }, [formState.level_id, formState.subject_id, editMode]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formState.title.trim() || !formState.level_id || !formState.subject_id) return;
+
     await onSubmit({
       title: formState.title,
       description: formState.description,
@@ -163,14 +187,12 @@ export default function CourseForm({
         onChange={(e) => setFormState((prev) => ({ ...prev, img: e.target.value }))}
       />
 
-      {/* ✅ Champ ordre */}
+      {/* Champ ordre non modifiable pour éviter les incohérences */}
       <input
-        className="border px-3 py-2 rounded"
+        className="border px-3 py-2 rounded bg-gray-100 cursor-not-allowed"
         type="number"
-        placeholder="Ordre d'affichage"
         value={formState.order}
-        onChange={(e) => setFormState((prev) => ({ ...prev, order: Number(e.target.value) }))}
-        min={0}
+        readOnly
       />
 
       <div className="flex gap-2">

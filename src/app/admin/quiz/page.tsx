@@ -1,5 +1,4 @@
-import QuizForm from "@/components/admin/QuizForm";
-import QuizList from "@/components/admin/QuizList";
+import QuizForm from "@/components/admin/quiz/QuizForm";
 
 export default function QuizPage() {
   return (
@@ -9,11 +8,7 @@ export default function QuizPage() {
         <QuizForm />
       </div>
 
-      {/* Liste des quiz existants */}
-      <div className="bg-white shadow rounded p-6">
-        <h2 className="text-xl font-bold mb-4">📋 Quiz existants</h2>
-        <QuizList />
-      </div>
+     
     </div>
   );
 }

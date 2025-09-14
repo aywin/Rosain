@@ -1,8 +1,7 @@
 "use client";
 
-import 'katex/dist/katex.min.css';
-import { BlockMath, InlineMath } from 'react-katex';
-import React from 'react';
+import { MathJax, MathJaxContext } from "better-react-mathjax";
+import React, { useRef, useEffect } from "react";
 
 type Props = {
   label: string;
@@ -11,65 +10,81 @@ type Props = {
   placeholder?: string;
 };
 
-export default function LatexPreview({ label, value, onChange, placeholder }: Props) {
-  // On découpe le texte en paragraphes avec double saut de ligne
-  const paragraphs = (value || '').split(/\n{2,}/).filter(p => p.length > 0);
-
-  // Fonction pour rendre chaque paragraphe
-  const renderParagraph = (p: string, key: number) => {
-    // Cas bloc math $$...$$ (multi-lignes incluses)
-    const blockMatch = p.match(/^\s*\$\$([\s\S]*)\$\$\s*$/);
-    if (blockMatch) {
-      return (
-        <div key={key} className="my-0">
-          <BlockMath>{blockMatch[1].trim()}</BlockMath>
-        </div>
-      );
-    }
-
-    // Sinon, c’est du texte avec éventuellement des maths inline $...$
-    const parts = p.split(/(\$[^$]+\$)/g).filter(Boolean);
-
-    return (
-      <p key={key} className="m-0 text-sm leading-snug">
-        {parts.map((seg, i) => {
-          if (seg.startsWith('$') && seg.endsWith('$')) {
-            // Cas inline math
-            const inner = seg.slice(1, -1);
-            return <InlineMath key={i}>{inner}</InlineMath>;
-          } else {
-            // Cas texte normal → on garde les sauts de ligne simples
-            const lines = seg.split('\n');
-            return lines.map((ln, idx) => (
-              <React.Fragment key={i + '-' + idx}>
-                {ln}
-                {idx < lines.length - 1 ? <br /> : null}
-              </React.Fragment>
-            ));
-          }
-        })}
-      </p>
-    );
+export default function LatexPreview({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: Props) {
+  const config = {
+    loader: { load: ["input/tex", "output/chtml", "[tex]/textmacros", "[tex]/noerrors", "[tex]/noundefined"] },
+    tex: {
+      inlineMath: [["$", "$"], ["\\(", "\\)"]],
+      displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+      processEscapes: true,
+      processEnvironments: true,
+      packages: { "[+]": ["base", "ams", "amscd", "color", "newcommand"] },
+      macros: {
+        R: "\\mathbb{R}",
+        N: "\\mathbb{N}",
+        Z: "\\mathbb{Z}",
+        Q: "\\mathbb{Q}",
+        C: "\\mathbb{C}",
+        vect: ["{\\overrightarrow{#1}}", 1], // \vect{AB}
+        abs: ["\\left|#1\\right|", 1],      // \abs{x}
+        norm: ["\\left\\lVert#1\\right\\rVert", 1], // \norm{u}
+        bar: ["\\overline{#1}", 1],         // \bar{ABC} pour barycentre
+        textbf: ["\\mathbf{#1}", 1],        // \textbf{texte} -> gras via MathJax
+        bigskip: ["\\vspace{1em}", 0],      // \bigskip -> espace vertical via MathJax
+      },
+    },
   };
 
+  // Référence pour le conteneur de preview
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Effet pour s'assurer que le contenu est sélectionnable
+  useEffect(() => {
+    if (previewRef.current) {
+      // Supprimer tout style qui pourrait bloquer la sélection
+      previewRef.current.style.userSelect = "text";
+      previewRef.current.style.webkitUserSelect = "text"; // Pour Safari
+    }
+  }, [value]);
+
+  // Découper par double saut de ligne, préserver les structures LaTeX
+  const paragraphs = value
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm font-medium">{label}</label>
+    <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-lg shadow-sm">
+      <label className="text-md font-semibold text-gray-700">{label}</label>
 
+      {/* Zone de saisie */}
       <textarea
-  className="border px-3 py-2 rounded w-full text-sm leading-tight min-h-[250px] font-serif"
-  placeholder={placeholder}
-  value={value}
-  onChange={(e) => onChange(e.target.value)}
-/>
+        className="border border-gray-300 px-4 py-3 rounded-lg w-full text-base leading-relaxed min-h-[300px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
 
-
-      {/* Aperçu */}
-      <div className="border rounded bg-white p-3 mt-1 text-sm leading-snug">
+      {/* Aperçu copiable */}
+      <div
+        ref={previewRef}
+        className="border border-gray-200 rounded-lg bg-white p-4 mt-2 text-base leading-relaxed select-text"
+      >
         {value && value.trim() ? (
-          paragraphs.map((p, i) => renderParagraph(p, i))
+          <MathJaxContext version={3} config={config}>
+            {paragraphs.map((p, i) => (
+              <p key={i} className="mb-4" style={{ marginBottom: p.includes("\\bigskip") ? "1em" : "inherit" }}>
+                <MathJax dynamic>{p}</MathJax>
+              </p>
+            ))}
+          </MathJaxContext>
         ) : (
-          <span className="text-gray-400">Aperçu LaTeX ici...</span>
+          <span className="text-gray-500 italic">Entrez du code LaTeX pour un aperçu...</span>
         )}
       </div>
     </div>

@@ -7,35 +7,48 @@ import { setDoc, doc } from "firebase/firestore";
 
 export default function SignupForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ nom: "", prenom: "", email: "", password: "" });
+  const [form, setForm] = useState({
+    nom: "",
+    prenom: "",
+    email: "",
+    password: "",
+    role: "eleve", // par défaut
+  });
+  const [childrenEmails, setChildrenEmails] = useState<string[]>([]);
   const [error, setError] = useState("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const addChildEmail = () => setChildrenEmails([...childrenEmails, ""]);
+  const handleChildEmailChange = (index: number, value: string) => {
+    const newEmails = [...childrenEmails];
+    newEmails[index] = value;
+    setChildrenEmails(newEmails);
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     try {
-      console.log("Tentative d'inscription avec :", form.email, form.password);
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      console.log("✅ Utilisateur créé :", userCred.user);
-
       const userId = userCred.user.uid;
+
       await setDoc(doc(db, "users", userId), {
         nom: form.nom,
         prenom: form.prenom,
         email: form.email,
-        role: "eleve",
+        role: form.role, // eleve, parent, tuteur
         statut_paiement: false,
-        id_ecole: null
+        id_ecole: null,
+        linkedStudents: [], // pour parent/tuteur
+        pendingChildrenEmails: childrenEmails, // emails ajoutés
+        createdAt: new Date(),
       });
-      console.log("✅ Document Firestore ajouté pour :", userId);
 
       router.push("/");
     } catch (err: any) {
-      console.error("❌ Erreur inscription :", err.code, err.message);
-
+      console.error("Erreur inscription :", err);
       let message = "Une erreur est survenue. Veuillez réessayer.";
       switch (err.code) {
         case "auth/email-already-in-use":
@@ -53,14 +66,17 @@ export default function SignupForm() {
         default:
           message = err.message;
       }
-
       setError(message);
     }
   };
 
   return (
-    <form className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow" onSubmit={handleSignup}>
+    <form
+      className="max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow"
+      onSubmit={handleSignup}
+    >
       <h2 className="text-2xl font-bold mb-4">Inscription</h2>
+
       <input
         type="text"
         name="nom"
@@ -97,6 +113,56 @@ export default function SignupForm() {
         onChange={handleChange}
         className="input mb-4 w-full"
       />
+
+      {/* Sélecteur de rôle */}
+      <label className="block mb-2 font-semibold">Je suis :</label>
+      <select
+        name="role"
+        value={form.role}
+        onChange={handleChange}
+        className="input mb-4 w-full"
+      >
+        <option value="eleve">Élève</option>
+        <option value="parent">Parent</option>
+        <option value="tuteur">Tuteur</option>
+      </select>
+
+      {/* Bloc optionnel – uniquement pour parent/tuteur */}
+      {(form.role === "parent" || form.role === "tuteur") && (
+        <div className="mb-4">
+          <label className="block font-semibold mb-2">Ajouter un enfant (optionnel)</label>
+          {childrenEmails.map((email, index) => (
+  <div key={index} className="flex items-center mb-2">
+    <input
+      type="email"
+      placeholder="Email de l'enfant"
+      value={email}
+      onChange={(e) => handleChildEmailChange(index, e.target.value)}
+      className="input w-full"
+    />
+    <button
+      type="button"
+      onClick={() => {
+        const newEmails = [...childrenEmails];
+        newEmails.splice(index, 1); // supprime le champ à cet index
+        setChildrenEmails(newEmails);
+      }}
+      className="ml-2 text-red-600 font-bold"
+    >
+      ❌
+    </button>
+  </div>
+))}
+
+          <button
+            type="button"
+            onClick={addChildEmail}
+            className="text-blue-700 underline"
+          >
+            + Ajouter un autre enfant
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 rounded bg-red-100 text-red-700 border border-red-300">
