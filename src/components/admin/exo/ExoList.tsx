@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/firebase";
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  setDoc,
-} from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, setDoc } from "firebase/firestore";
 import ExoForm from "./ExoForm";
 
 interface Exo {
@@ -28,7 +22,12 @@ interface NameMap {
   [id: string]: string;
 }
 
-export default function ExoList() {
+// 🔹 Props pour accepter refreshTrigger
+interface ExoListProps {
+  refreshTrigger: number;
+}
+
+export default function ExoList({ refreshTrigger }: ExoListProps) {
   const [exos, setExos] = useState<Exo[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Exo | null>(null);
@@ -71,9 +70,10 @@ export default function ExoList() {
     setLoading(false);
   };
 
+  // 🔹 Se recharge automatiquement si refreshTrigger change
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [refreshTrigger]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Supprimer cet exercice ?")) return;

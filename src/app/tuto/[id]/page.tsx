@@ -29,8 +29,13 @@ interface Video {
 }
 
 export default function TutoPage() {
-  const { id } = useParams();
-  const courseId = Array.isArray(id) ? id[0] : id;
+  // Gestion robuste des paramètres de la route
+  const params = useParams();
+  const courseId = params?.id
+    ? Array.isArray(params.id)
+      ? params.id[0]
+      : params.id
+    : null;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
@@ -40,9 +45,10 @@ export default function TutoPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
+  if (!courseId) return <div className="p-12 text-red-500">ID manquant</div>;
+
   // Vérifier l'inscription
   useEffect(() => {
-    if (!courseId) return;
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         setAllowed(false);
@@ -157,7 +163,6 @@ export default function TutoPage() {
     );
   };
 
-  if (!courseId) return <div className="p-12 text-red-500">ID manquant</div>;
   if (loading) return <div className="p-12">Chargement…</div>;
   if (!allowed) return <div className="p-12 text-red-500">Accès refusé</div>;
   if (!course) return <div className="p-12">Cours introuvable</div>;
@@ -180,7 +185,7 @@ export default function TutoPage() {
             if (auth.currentUser) {
               updateProgress(
                 auth.currentUser.uid,
-                courseId!,
+                courseId,
                 videos[i].order ?? 0,
                 videos
               );
@@ -211,8 +216,8 @@ export default function TutoPage() {
               <VideoPlayer
                 url={videos[current].url}
                 title={videos[current].title}
-                courseId={courseId!}                    // <-- ID du cours
-                videoIdFirestore={videos[current].id}   // <-- ID Firestore de la vidéo
+                courseId={courseId}
+                videoIdFirestore={videos[current].id}
                 onAssistantClick={() => setShowAssistant(true)}
                 onNext={() => {
                   if (current !== null && current + 1 < videos.length) {
@@ -220,7 +225,7 @@ export default function TutoPage() {
                     if (auth.currentUser) {
                       updateProgress(
                         auth.currentUser.uid,
-                        courseId!,
+                        courseId,
                         videos[current + 1].order ?? 0,
                         videos
                       );
