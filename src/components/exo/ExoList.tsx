@@ -5,6 +5,7 @@ import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoFilters from "./ExoFilters";
 import ExoCard from "./ExoCard";
+import { FaSpinner } from "react-icons/fa";
 
 interface Level { id: string; name: string; }
 interface Subject { id: string; name: string; }
@@ -46,7 +47,12 @@ export default function ExoList() {
     fetchData();
   }, []);
 
-  if (loading) return <p>Chargement...</p>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-64">
+      <FaSpinner className="animate-spin text-blue-500 text-3xl" />
+      <span className="ml-2 text-gray-700">Chargement des exercices...</span>
+    </div>
+  );
 
   // Filtrage dynamique
   const filteredCourses = courses.filter(
@@ -58,36 +64,41 @@ export default function ExoList() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">📚 Bibliothèque d’exercices</h1>
 
-      <ExoFilters
-        levels={levels}
-        subjects={subjects}
-        courses={courses}
-        levelId={levelId}
-        subjectId={subjectId}
-        courseId={courseId}
-        setLevelId={setLevelId}
-        setSubjectId={setSubjectId}
-        setCourseId={setCourseId}
-      />
 
-      {filteredExos.length === 0 && <p>Aucun exercice trouvé.</p>}
-      <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-6">
-        {filteredExos.map(exo => (
-          <ExoCard
-            key={exo.id}
-            exo={exo}
-            levels={levels}
-            subjects={subjects}
-            courses={courses}
-            openStatementId={openStatementId}
-            openSolutionId={openSolutionId}
-            setOpenStatementId={setOpenStatementId}
-            setOpenSolutionId={setOpenSolutionId}
-          />
-        ))}
+  <ExoFilters
+    levels={levels}
+    subjects={subjects}
+    courses={courses}
+    levelId={levelId}
+    subjectId={subjectId}
+    courseId={courseId}
+    setLevelId={setLevelId}
+    setSubjectId={setSubjectId}
+    setCourseId={setCourseId}
+  />
+
+  {filteredExos.length === 0 && (
+    <p className="text-center text-gray-500 mt-6">Aucun exercice trouvé.</p>
+  )}
+
+  <div className="flex flex-col items-center gap-6 mt-6">
+    {filteredExos.map((exo) => (
+      <div key={exo.id} className="w-full max-w-2xl">
+        <ExoCard
+          exo={exo}
+          levels={levels}
+          subjects={subjects}
+          courses={courses}
+          openStatementId={openStatementId}
+          openSolutionId={openSolutionId}
+          setOpenStatementId={setOpenStatementId}
+          setOpenSolutionId={setOpenSolutionId}
+        />
       </div>
-    </div>
+    ))}
+  </div>
+</div>
+
   );
 }

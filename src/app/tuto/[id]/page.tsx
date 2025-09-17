@@ -19,6 +19,7 @@ import CourseHeader from "@/components/tuto/CourseHeader";
 import VideoPlayer from "@/components/tuto/VideoPlayer";
 import VideoTranscript from "@/components/tuto/VideoTranscript";
 import AssistantPanel from "@/components/AssistantPanel";
+import ExoPlayer from "@/components/tuto/ExoPlayer";
 
 interface Video {
   id: string;
@@ -28,26 +29,32 @@ interface Video {
   quizzes?: any[];
 }
 
+interface AppExo {
+  id: string;
+  title: string;
+  videoAfter: string;
+}
+
+type ContentItem =
+  | ({ type: "video" } & Video)
+  | ({ type: "exo" } & AppExo);
+
 export default function TutoPage() {
-  // Gestion robuste des paramètres de la route
-  const params = useParams();
-  const courseId = params?.id
-    ? Array.isArray(params.id)
-      ? params.id[0]
-      : params.id
-    : null;
+  const params = useParams<{ id: string }>();
+  if (!params?.id) return <div className="p-12 text-red-500">ID manquant</div>;
+  const courseId = params.id;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [current, setCurrent] = useState<number | null>(0);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [appExos, setAppExos] = useState<AppExo[]>([]);
+  const [content, setContent] = useState<ContentItem[]>([]);
   const [course, setCourse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  if (!courseId) return <div className="p-12 text-red-500">ID manquant</div>;
-
-  // Vérifier l'inscription
+  // Vérifier inscription
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -75,7 +82,6 @@ export default function TutoPage() {
 
   // Charger le cours
   useEffect(() => {
-    if (!courseId) return;
     getDoc(doc(db, "courses", courseId))
       .then(async (snap) => {
         if (snap.exists()) {
@@ -91,10 +97,9 @@ export default function TutoPage() {
       });
   }, [courseId]);
 
-  // Charger les vidéos et leurs quiz
+  // Charger vidéos + exos
   useEffect(() => {
-    if (!courseId) return;
-    const loadVideosAndQuizzes = async () => {
+    const loadContent = async () => {
       try {
         const videoQuery = query(
           collection(db, "videos"),
@@ -124,19 +129,40 @@ export default function TutoPage() {
             } as Video;
           })
         );
-
         vids.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
-        if (vids.length > 0) setCurrent(0);
+
+        const exoQuery = query(
+          collection(db, "app_exercises"),
+          where("courseId", "==", courseId)
+        );
+        const exoSnap = await getDocs(exoQuery);
+        const exos: AppExo[] = exoSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        setAppExos(exos);
+
+        const merged: ContentItem[] = [];
+        vids.forEach((video) => {
+          merged.push({ type: "video", ...video });
+          const afterExos = exos.filter((e) => e.videoAfter === video.id);
+          afterExos.forEach((exo) => merged.push({ type: "exo", ...exo }));
+        });
+
+        setContent(merged);
+        if (merged.length > 0) setCurrent(0);
       } catch (error) {
         console.error(error);
         setVideos([]);
+        setAppExos([]);
+        setContent([]);
       }
     };
-    loadVideosAndQuizzes();
+    loadContent();
   }, [courseId]);
 
-  // Mettre à jour la progression
+  // progression
   const updateProgress = async (
     userId: string,
     courseId: string,
@@ -166,7 +192,9 @@ export default function TutoPage() {
   if (loading) return <div className="p-12">Chargement…</div>;
   if (!allowed) return <div className="p-12 text-red-500">Accès refusé</div>;
   if (!course) return <div className="p-12">Cours introuvable</div>;
-  if (videos.length === 0) return <div className="p-12">Aucune vidéo</div>;
+  if (content.length === 0) return <div className="p-12">Aucun contenu</div>;
+
+  const currentItem = current !== null ? content[current] : null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
@@ -177,16 +205,18 @@ export default function TutoPage() {
         } fixed top-0 left-0 z-30 h-full w-64 bg-white shadow-lg lg:static lg:block`}
       >
         <Sidebar
-          videos={videos.map(({ id, title }) => ({ id, title }))}
+          content={content.map(({ id, title, type }) => ({ id, title, type }))}
           current={current}
           setCurrent={(i) => {
             setCurrent(i);
             setSidebarOpen(false);
-            if (auth.currentUser) {
+
+            const item = content[i];
+            if (auth.currentUser && item.type === "video") {
               updateProgress(
                 auth.currentUser.uid,
                 courseId,
-                videos[i].order ?? 0,
+                (item as Video).order ?? 0,
                 videos
               );
             }
@@ -202,7 +232,7 @@ export default function TutoPage() {
         />
       )}
 
-      {/* Contenu */}
+      {/* Contenu principal */}
       <div className="flex-1 flex flex-col bg-blue-100 relative overflow-y-auto">
         <CourseHeader
           titre={course.titre}
@@ -211,34 +241,55 @@ export default function TutoPage() {
         />
 
         <div className="flex-1 flex flex-col px-4 py-4">
-          {current !== null && videos[current] ? (
-            <>
-              <VideoPlayer
-                url={videos[current].url}
-                title={videos[current].title}
-                courseId={courseId}
-                videoIdFirestore={videos[current].id}
-                onAssistantClick={() => setShowAssistant(true)}
+          {currentItem ? (
+            currentItem.type === "video" ? (
+              <>
+                <VideoPlayer
+                  url={currentItem.url}
+                  title={currentItem.title}
+                  courseId={courseId}
+                  videoIdFirestore={currentItem.id}
+                  onAssistantClick={() => setShowAssistant(true)}
+                  onNext={() => {
+                    if (current !== null && current + 1 < content.length) {
+                      setCurrent(current + 1);
+                      const next = content[current + 1];
+                      if (auth.currentUser && next.type === "video") {
+                        updateProgress(
+                          auth.currentUser.uid,
+                          courseId,
+                          (next as Video).order ?? 0,
+                          videos
+                        );
+                      }
+                    }
+                  }}
+                  quizzes={(currentItem as Video).quizzes}
+                />
+                <VideoTranscript />
+              </>
+            ) : (
+              <ExoPlayer
+                exoId={currentItem.id}
                 onNext={() => {
-                  if (current !== null && current + 1 < videos.length) {
+                  if (current !== null && current + 1 < content.length) {
                     setCurrent(current + 1);
-                    if (auth.currentUser) {
+                    const next = content[current + 1];
+                    if (auth.currentUser && next.type === "video") {
                       updateProgress(
                         auth.currentUser.uid,
                         courseId,
-                        videos[current + 1].order ?? 0,
+                        (next as Video).order ?? 0,
                         videos
                       );
                     }
                   }
                 }}
-                quizzes={videos[current].quizzes}
               />
-              <VideoTranscript />
-            </>
+            )
           ) : (
             <div className="text-gray-500 mt-12 text-lg">
-              Veuillez sélectionner une vidéo.
+              Veuillez sélectionner un élément.
             </div>
           )}
         </div>

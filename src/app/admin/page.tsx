@@ -2,14 +2,15 @@
 
 import ProtectSuperAdminRoute from "@/components/auth/ProtectSuperAdminRoute";
 import { useRouter } from "next/navigation";
-import { BookOpen, Clipboard, Video, CheckSquare, Tag, BarChart2 } from "lucide-react";
+import { BookOpen, Clipboard, Video, CheckSquare ,  Tag, BarChart2, FileText } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
 
   const adminPages = [
     { name: "Cours", path: "/admin/courses", icon: <BookOpen size={20} /> },
-    { name: "Exercices", path: "/admin/exo", icon: <Clipboard size={20} /> },
+    { name: "Exercices", path: "/admin/exo", icon: <FileText size={20} /> },
+    { name: "App-Exercices", path: "/admin/app-exo", icon: <FileText size={20} /> },
     { name: "Vidéos", path: "/admin/videos", icon: <Video size={20} /> },
     { name: "Quiz", path: "/admin/quiz", icon: <CheckSquare size={20} /> },
     { name: "Matières", path: "/admin/subjects", icon: <Tag size={20} /> },

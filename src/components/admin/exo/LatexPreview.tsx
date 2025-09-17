@@ -2,6 +2,7 @@
 
 import { MathJax, MathJaxContext } from "better-react-mathjax";
 import React, { useRef, useEffect } from "react";
+import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 
 type Props = {
   label: string;
@@ -16,43 +17,17 @@ export default function LatexPreview({
   onChange,
   placeholder,
 }: Props) {
-  const config = {
-    loader: { load: ["input/tex", "output/chtml", "[tex]/textmacros", "[tex]/noerrors", "[tex]/noundefined"] },
-    tex: {
-      inlineMath: [["$", "$"], ["\\(", "\\)"]],
-      displayMath: [["$$", "$$"], ["\\[", "\\]"]],
-      processEscapes: true,
-      processEnvironments: true,
-      packages: { "[+]": ["base", "ams", "amscd", "color", "newcommand"] },
-      macros: {
-        R: "\\mathbb{R}",
-        N: "\\mathbb{N}",
-        Z: "\\mathbb{Z}",
-        Q: "\\mathbb{Q}",
-        C: "\\mathbb{C}",
-        vect: ["{\\overrightarrow{#1}}", 1], // \vect{AB}
-        abs: ["\\left|#1\\right|", 1],      // \abs{x}
-        norm: ["\\left\\lVert#1\\right\\rVert", 1], // \norm{u}
-        bar: ["\\overline{#1}", 1],         // \bar{ABC} pour barycentre
-        textbf: ["\\mathbf{#1}", 1],        // \textbf{texte} -> gras via MathJax
-        bigskip: ["\\vspace{1em}", 0],      // \bigskip -> espace vertical via MathJax
-      },
-    },
-  };
-
-  // Référence pour le conteneur de preview
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Effet pour s'assurer que le contenu est sélectionnable
+  // Rendre le contenu sélectionnable
   useEffect(() => {
     if (previewRef.current) {
-      // Supprimer tout style qui pourrait bloquer la sélection
       previewRef.current.style.userSelect = "text";
-      previewRef.current.style.webkitUserSelect = "text"; // Pour Safari
+      previewRef.current.style.webkitUserSelect = "text";
     }
   }, [value]);
 
-  // Découper par double saut de ligne, préserver les structures LaTeX
+  // Découper par double saut de ligne pour simuler des paragraphes
   const paragraphs = value
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -70,21 +45,29 @@ export default function LatexPreview({
         onChange={(e) => onChange(e.target.value)}
       />
 
-      {/* Aperçu copiable */}
+      {/* Aperçu */}
       <div
         ref={previewRef}
         className="border border-gray-200 rounded-lg bg-white p-4 mt-2 text-base leading-relaxed select-text"
       >
         {value && value.trim() ? (
-          <MathJaxContext version={3} config={config}>
+          <MathJaxContext config={mathJaxConfig}>
             {paragraphs.map((p, i) => (
-              <p key={i} className="mb-4" style={{ marginBottom: p.includes("\\bigskip") ? "1em" : "inherit" }}>
+              <p
+                key={i}
+                className="mb-4"
+                style={{
+                  marginBottom: p.includes("\\bigskip") ? "1em" : "inherit",
+                }}
+              >
                 <MathJax dynamic>{p}</MathJax>
               </p>
             ))}
           </MathJaxContext>
         ) : (
-          <span className="text-gray-500 italic">Entrez du code LaTeX pour un aperçu...</span>
+          <span className="text-gray-500 italic">
+            Entrez du code LaTeX pour un aperçu...
+          </span>
         )}
       </div>
     </div>

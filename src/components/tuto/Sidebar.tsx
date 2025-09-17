@@ -3,8 +3,14 @@
 import React from "react";
 import { X } from "lucide-react";
 
+interface ContentItem {
+  id: string;
+  title: string;
+  type: "video" | "exo";
+}
+
 interface SidebarProps {
-  videos: { id: string; title: string }[];
+  content: ContentItem[];
   current: number | null;
   setCurrent: (index: number) => void;
   isOpen?: boolean;
@@ -12,7 +18,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({
-  videos,
+  content,
   current,
   setCurrent,
   isOpen = true,
@@ -27,7 +33,7 @@ export default function Sidebar({
         bg-gray-200 w-64 p-4 overflow-y-auto
       `}
     >
-      {/* Bouton de fermeture sur mobile */}
+      {/* Bouton mobile */}
       <div className="flex justify-between items-center mb-4 lg:hidden">
         <h2 className="text-lg font-bold">Chapitres du cours</h2>
         <button onClick={onClose}>
@@ -36,19 +42,18 @@ export default function Sidebar({
       </div>
 
       <ul className="space-y-2">
-        {videos.map((video, index) => (
+        {content.map((item, index) => (
           <li
-            key={video.id}
-            className={`cursor-pointer ${
+            key={item.id}
+            className={`cursor-pointer flex items-center gap-2 ${
               current === index ? "font-bold text-blue-600" : ""
             }`}
             onClick={() => setCurrent(index)}
           >
-            {index + 1}. {video.title}
+            {item.type === "video" ? "🎬" : "📝"} {index + 1}. {item.title}
           </li>
         ))}
       </ul>
     </div>
   );
 }
-

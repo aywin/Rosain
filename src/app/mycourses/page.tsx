@@ -3,10 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
-import { collection, getDocs, query, where, doc, getDoc, deleteDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc,
+  deleteDoc,
+} from "firebase/firestore";
 import { mapCourseWithNames, Course } from "@/utils/mapCourse";
 import CourseCard from "@/components/course/CourseCard";
-import AlertModal from "@/components/ui/AlertModal"; // <-- Import du modal
+import AlertModal from "@/components/ui/AlertModal";
+import { FaSpinner } from "react-icons/fa";
 
 interface CourseWithStatus extends Course {
   enrolled: boolean;
@@ -19,11 +28,8 @@ export default function MyCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [notLogged, setNotLogged] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-
-  // Pour le modal de désinscription
   const [alertCourseId, setAlertCourseId] = useState<string | null>(null);
 
-  // Récupérer les cours de l'utilisateur
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -31,15 +37,15 @@ export default function MyCoursesPage() {
         setLoading(false);
         return;
       }
-
       setUserId(user.uid);
 
       try {
-        // Récupérer les inscriptions
         const enrollSnap = await getDocs(
           query(collection(db, "enrollments"), where("id_user", "==", user.uid))
         );
-        const enrollments = enrollSnap.docs.map((doc) => doc.data() as { id_course: string });
+        const enrollments = enrollSnap.docs.map(
+          (doc) => doc.data() as { id_course: string }
+        );
 
         const courseList: CourseWithStatus[] = [];
 
@@ -49,14 +55,15 @@ export default function MyCoursesPage() {
 
           const mapped = await mapCourseWithNames(docSnap.id, docSnap.data());
 
-          // Vérifier progression
           const qProgress = query(
             collection(db, "progress"),
             where("id_user", "==", user.uid),
             where("id_course", "==", docSnap.id)
           );
           const progressSnap = await getDocs(qProgress);
-          let progressStatus: "not_started" | "in_progress" | "done" = "not_started";
+
+          let progressStatus: "not_started" | "in_progress" | "done" =
+            "not_started";
           if (!progressSnap.empty) {
             const data = progressSnap.docs[0].data();
             progressStatus = data.status || "not_started";
@@ -69,14 +76,17 @@ export default function MyCoursesPage() {
           });
         }
 
-        // Trier par niveau → matière → titre
-        courseList.sort((a, b) => {
+        const uniqueCourses = Array.from(
+          new Map(courseList.map((c) => [c.id, c])).values()
+        );
+
+        uniqueCourses.sort((a, b) => {
           if (a.niveau !== b.niveau) return a.niveau.localeCompare(b.niveau);
           if (a.matiere !== b.matiere) return a.matiere.localeCompare(b.matiere);
           return a.titre.localeCompare(b.titre);
         });
 
-        setCourses(courseList);
+        setCourses(uniqueCourses);
       } catch (err) {
         console.error("Erreur récupération mes cours :", err);
       } finally {
@@ -87,91 +97,42 @@ export default function MyCoursesPage() {
     return () => unsubscribe();
   }, []);
 
-  // -------------------
-  // Gestion désinscription avec modal
-  // -------------------
-
-  const handleUnenrollClick = (courseId: string) => {
-    setAlertCourseId(courseId); // ouvre la popup
-  };
-
+  const handleUnenrollClick = (courseId: string) => setAlertCourseId(courseId);
   const handleConfirmUnenroll = async () => {
     if (!alertCourseId || !userId) return;
 
     try {
-      // Supprimer l'inscription
       const qEnroll = query(
         collection(db, "enrollments"),
         where("id_user", "==", userId),
         where("id_course", "==", alertCourseId)
       );
       const enrollSnap = await getDocs(qEnroll);
-      for (const docSnap of enrollSnap.docs) {
+      for (const docSnap of enrollSnap.docs)
         await deleteDoc(doc(db, "enrollments", docSnap.id));
-      }
 
-      // Supprimer le progrès associé
       const qProgress = query(
         collection(db, "progress"),
         where("id_user", "==", userId),
         where("id_course", "==", alertCourseId)
       );
       const progressSnap = await getDocs(qProgress);
-      for (const docSnap of progressSnap.docs) {
+      for (const docSnap of progressSnap.docs)
         await deleteDoc(doc(db, "progress", docSnap.id));
-      }
 
-      // Mettre à jour le state pour enlever le cours
       setCourses((prev) => prev.filter((c) => c.id !== alertCourseId));
     } catch (err) {
       console.error("Erreur lors de la désinscription :", err);
     } finally {
-      setAlertCourseId(null); // ferme la popup
+      setAlertCourseId(null);
     }
   };
-
   const handleCancelUnenroll = () => setAlertCourseId(null);
 
-  // -------------------
-  // Affichage
-  // -------------------
+  if (loading) return <LoadingHero />;
+  if (notLogged) return <NotLoggedHero router={router} />;
+  if (courses.length === 0) return <NoCoursesHero />;
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto py-10 px-4 text-center">
-        <h1 className="text-3xl font-bold mb-8">Mes cours</h1>
-        <div>Chargement...</div>
-      </div>
-    );
-  }
-
-  if (notLogged) {
-    return (
-      <div className="max-w-7xl mx-auto py-10 px-4 text-center">
-        <h1 className="text-3xl font-bold mb-8">Mes cours</h1>
-        <div>
-          Vous devez être connecté pour voir vos cours.{" "}
-          <button
-            className="ml-2 underline text-blue-700"
-            onClick={() => router.push("/login")}
-          >
-            Se connecter
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (courses.length === 0) {
-    return (
-      <div className="max-w-7xl mx-auto py-10 px-4 text-center">
-        <h1 className="text-3xl font-bold mb-8">Mes cours</h1>
-        <div>Vous n'êtes inscrit à aucun cours pour l’instant.</div>
-      </div>
-    );
-  }
-
-  // Regrouper par niveau → matière
   const grouped: Record<string, Record<string, CourseWithStatus[]>> = {};
   courses.forEach((c) => {
     if (!grouped[c.niveau]) grouped[c.niveau] = {};
@@ -180,38 +141,60 @@ export default function MyCoursesPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-12">
-      <h1 className="text-3xl font-bold mb-8 text-center">Mes cours</h1>
+    <div className="bg-gray-50 min-h-screen text-gray-800">
+      {/* Hero */}
+      <section className="bg-gradient-to-r from-[#0D1B2A] to-[#1B9AAA] py-20 text-white">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <h1 className="text-5xl font-bold mb-4">Mes cours</h1>
+          <p className="text-lg opacity-90 max-w-3xl mx-auto">
+            Suivez vos cours et progressez étape par étape.
+          </p>
+        </div>
+      </section>
 
-      {Object.entries(grouped).map(([niveau, matieres]) => (
-        <section key={niveau}>
-          <h2 className="text-3xl font-bold text-blue-700 mb-6 border-b pb-2">{niveau}</h2>
-          {Object.entries(matieres).map(([matiere, coursList]) => (
-            <div key={matiere} className="mb-10">
-              <h3 className="text-2xl font-semibold text-gray-800 mb-4">{matiere}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {coursList.map((course) => (
-                  <div key={course.id} className="flex flex-col">
-                    <CourseCard
-                      course={course}
-                      onEnroll={() => router.push(`/tuto/${course.id}`)}
-                    />
-                    {/* Bouton de désinscription uniquement pour MyCourses */}
-                    <button
-                      onClick={() => handleUnenrollClick(course.id)}
-                      className="mt-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-1 py-0.5 rounded transition w-max"
+      {/* Cours */}
+      <section className="max-w-7xl mx-auto px-6 py-16 space-y-12">
+        {Object.entries(grouped).map(([niveau, matieres]) => (
+          <div key={niveau}>
+            <h2 className="text-3xl font-bold text-[#1B9AAA] mb-6 border-b-2 border-[#0D1B2A] pb-2">
+              {niveau}
+            </h2>
+            {Object.entries(matieres).map(([matiere, coursList]) => (
+              <div key={matiere} className="mb-10">
+                <h3 className="text-2xl font-semibold text-[#0D1B2A] mb-4">
+                  {matiere}
+                </h3>
+
+                {/* grid centrée */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 justify-items-center">
+                  {coursList.map((course, idx) => (
+                    <div
+                      key={`${course.id}-${idx}`}
+                      className="justify-self-center"
                     >
-                      ✕ Se désinscrire
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </section>
-      ))}
+                      {/* carte + bouton */}
+                      <div className="inline-flex flex-col max-w-sm transition hover:scale-105 duration-200 shadow-lg rounded-2xl bg-white">
+                        <CourseCard
+                          course={course}
+                          onEnroll={() => router.push(`/tuto/${course.id}`)}
+                        />
 
-      {/* Modal de confirmation */}
+                        <button
+                          onClick={() => handleUnenrollClick(course.id)}
+                          className="mt-2 bg-[#4CAF50] hover:bg-red-600 text-white font-semibold text-sm py-2 w-full rounded-b-2xl transition"
+                        >
+                          ✕ Se désinscrire
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </section>
+
       {alertCourseId && (
         <AlertModal
           message="Une fois désinscrit, l'état de progression sera perdu. Si vous revenez, vous recommencerez à 0. Voulez-vous vraiment vous désinscrire ?"
@@ -219,6 +202,48 @@ export default function MyCoursesPage() {
           onCancel={handleCancelUnenroll}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------
+// Composants secondaires
+// ---------------------------
+
+function LoadingHero() {
+  return (
+    <div className="bg-gradient-to-r from-[#0D1B2A] to-[#1B9AAA] min-h-screen flex flex-col justify-center items-center text-white text-center px-6">
+      <h1 className="text-5xl font-bold mb-6">Mes cours</h1>
+      <FaSpinner className="animate-spin text-4xl mb-4" />
+      <p className="text-lg">Chargement en cours...</p>
+    </div>
+  );
+}
+
+function NotLoggedHero({ router }: { router: any }) {
+  return (
+    <div className="max-w-5xl mx-auto py-20 px-6 text-center">
+      <h1 className="text-4xl font-bold mb-4 text-[#0D1B2A]">Mes cours</h1>
+      <p className="mb-4 text-gray-700">
+        Vous devez être connecté pour voir vos cours.
+      </p>
+      <button
+        className="bg-[#1B9AAA] hover:bg-[#0D1B2A] text-white px-4 py-2 rounded font-semibold transition"
+        onClick={() => router.push("/login")}
+      >
+        Se connecter
+      </button>
+    </div>
+  );
+}
+
+function NoCoursesHero() {
+  return (
+    <div className="max-w-5xl mx-auto py-20 px-6 text-center">
+      <h1 className="text-4xl font-bold mb-4 text-[#0D1B2A]">Mes cours</h1>
+      <p className="text-gray-700">
+        Vous n'êtes inscrit à aucun cours pour l’instant.
+      </p>
     </div>
   );
 }
