@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, User, Menu, X, Home, BookOpen, FileText, Video, HelpCircle } from "lucide-react";
-import { Settings, ClipboardList, Edit, Info } from "lucide-react";
-import { FileEdit, Sliders } from "lucide-react";
+import { User, Menu, X, Home, BookOpen, FileEdit, ClipboardList, Info, Settings } from "lucide-react";
 import { auth, db } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -19,10 +17,21 @@ export default function Header() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  const colors = {
+    darkBlue: "#25364C",
+    white: "#FFFFFF",
+    primaryBlue: "#1F77B0",
+    primaryGreen: "#65B04E",
+    lightGray: "#F9FAFB",
+    hoverBlue: "#155E8B",
+    lightHover: "#E5F0FA",
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const docSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+        const docRef = doc(db, "users", firebaseUser.uid);
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           setUser({
@@ -62,32 +71,42 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-gradient-to-r from-[#0D1B2A] to-[#1B9AAA] text-white shadow-md relative z-50">
+    <header className="shadow-md relative z-50 bg-white text-[#25364C]">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
           <Image src="/logo.jpg" alt="Logo Rosaine Academy" width={40} height={40} className="rounded-full" />
-          <span className="text-2xl font-bold hover:opacity-90">Rosaine Academy</span>
+          <span className="text-2xl font-bold text-[#25364C] hover:opacity-80">Rosaine Academy</span>
         </Link>
 
         {/* Navigation desktop */}
         <nav className="hidden md:flex space-x-6 font-medium items-center">
-          <Link href="/" className="flex items-center gap-1 hover:text-[#4CAF50]"><Home size={16} /> Accueil</Link>
+          <Link href="/" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+            <Home size={16} /> Accueil
+          </Link>
 
           {user && (
             <>
-              <Link href="/courses" className="flex items-center gap-1 hover:text-[#4CAF50]"><BookOpen size={16} /> Cours</Link>
-              <Link href="/mycourses" className="flex items-center gap-1 hover:text-[#4CAF50]"><ClipboardList size={16} /> Mes Cours</Link>
-              <Link href="/exercices" className="flex items-center gap-1 hover:text-[#4CAF50]"><FileEdit size={16} /> Exercices</Link>
+              <Link href="/courses" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+                <BookOpen size={16} /> Cours
+              </Link>
+              <Link href="/mycourses" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+                <ClipboardList size={16} /> Mes Cours
+              </Link>
+              <Link href="/exercices" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+                <FileEdit size={16} /> Exercices
+              </Link>
             </>
           )}
 
-          <Link href="/about" className="flex items-center gap-1 hover:text-[#4CAF50]"><Info size={16} /> À propos</Link>
+          <Link href="/about" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+            <Info size={16} /> À propos
+          </Link>
 
           {role === "superadmin" && (
             <Link
               href="/admin"
-              className="flex items-center gap-1 bg-[#1B9AAA] text-white px-3 py-1 rounded hover:bg-[#0D1B2A] transition"
+              className="flex items-center gap-1 px-3 py-1 rounded bg-[#25364C] text-white hover:bg-[#334155] transition"
             >
               <Settings size={16} /> Administration
             </Link>
@@ -100,7 +119,7 @@ export default function Header() {
             <>
               <button
                 onClick={toggleUserMenu}
-                className="flex items-center space-x-2 bg-[#4CAF50] text-white px-3 py-1 rounded hover:opacity-90 transition"
+                className="flex items-center space-x-2 px-3 py-1 rounded bg-[#F9FAFB] text-[#25364C] hover:bg-[#65B04E] hover:text-white transition"
               >
                 <User size={18} />
                 <span>{user.prenom} {user.nom}</span>
@@ -108,13 +127,16 @@ export default function Header() {
               {userMenuOpen && (
                 <div ref={userMenuRef} className="absolute right-0 top-12 bg-white text-gray-800 shadow-md rounded w-48 z-50">
                   <button
-                    className="w-full text-left px-4 py-2 hover:bg-[#E0F7FA]"
-                    onClick={() => { router.push("/profile"); setUserMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-[#E5F0FA] hover:text-[#65B04E]"
+                    onClick={() => {
+                      router.push("/profile");
+                      setUserMenuOpen(false);
+                    }}
                   >
                     Mon profil
                   </button>
                   <button
-                    className="w-full text-left px-4 py-2 hover:bg-[#E0F7FA]"
+                    className="w-full text-left px-4 py-2 hover:bg-[#E5F0FA] hover:text-[#65B04E]"
                     onClick={logout}
                   >
                     Se déconnecter
@@ -123,7 +145,10 @@ export default function Header() {
               )}
             </>
           ) : (
-            <Link href="/login" className="bg-white text-[#1B9AAA] px-3 py-1 rounded hover:bg-[#E0F7FA] transition">
+            <Link
+              href="/login"
+              className="px-3 py-1 rounded bg-[#1F77B0] text-white hover:bg-[#155E8B] transition"
+            >
               Connexion
             </Link>
           )}
@@ -132,7 +157,7 @@ export default function Header() {
         {/* Mobile menu toggle */}
         <button
           onClick={toggleMobileMenu}
-          className="md:hidden p-2 rounded text-white hover:bg-[#1B9AAA]/20"
+          className="md:hidden p-2 rounded text-[#1F77B0] hover:bg-[#E5F0FA]"
           aria-label="Menu mobile"
         >
           {mobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -141,22 +166,32 @@ export default function Header() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden bg-[#0D1B2A]/90 px-4 py-4 space-y-4 text-white">
-          <Link href="/" onClick={closeMobileMenu} className="block hover:text-[#4CAF50]">Accueil</Link>
+        <div className="md:hidden px-4 py-4 space-y-4 bg-[#F9FAFB] text-[#25364C]">
+          <Link href="/" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+            Accueil
+          </Link>
           {user && (
             <>
-              <Link href="/courses" onClick={closeMobileMenu} className="block hover:text-[#4CAF50]">Cours</Link>
-              <Link href="/mycourses" onClick={closeMobileMenu} className="block hover:text-[#4CAF50]">Mes Cours</Link>
-              <Link href="/exercices" onClick={closeMobileMenu} className="block hover:text-[#4CAF50]">Exercices</Link>
+              <Link href="/courses" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+                Cours
+              </Link>
+              <Link href="/mycourses" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+                Mes Cours
+              </Link>
+              <Link href="/exercices" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+                Exercices
+              </Link>
             </>
           )}
-          <Link href="/about" onClick={closeMobileMenu} className="block hover:text-[#4CAF50]">À propos</Link>
+          <Link href="/about" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+            À propos
+          </Link>
 
           {role === "superadmin" && (
             <Link
               href="/admin"
               onClick={closeMobileMenu}
-              className="block bg-[#1B9AAA] text-white px-3 py-2 rounded hover:bg-[#0D1B2A] transition"
+              className="block px-3 py-2 rounded bg-[#25364C] text-white hover:bg-[#334155] transition"
             >
               Administration
             </Link>
@@ -166,19 +201,23 @@ export default function Header() {
             <>
               <button
                 onClick={() => { router.push("/profile"); closeMobileMenu(); }}
-                className="w-full text-left hover:text-[#4CAF50]"
+                className="w-full text-left hover:text-[#65B04E]"
               >
                 Mon profil
               </button>
               <button
                 onClick={() => { logout(); closeMobileMenu(); }}
-                className="w-full text-left hover:text-[#4CAF50]"
+                className="w-full text-left hover:text-[#65B04E]"
               >
                 Se déconnecter
               </button>
             </>
           ) : (
-            <Link href="/login" onClick={closeMobileMenu} className="block text-center bg-white text-[#1B9AAA] px-3 py-1 rounded hover:bg-[#E0F7FA]">
+            <Link
+              href="/login"
+              onClick={closeMobileMenu}
+              className="block px-3 py-1 rounded bg-[#1F77B0] text-white hover:bg-[#155E8B] transition text-center"
+            >
               Connexion
             </Link>
           )}

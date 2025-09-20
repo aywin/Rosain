@@ -1,6 +1,8 @@
 import "./globals.css"; // CSS global avec Tailwind
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { MathJaxContext } from "better-react-mathjax";
+import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 
 export const metadata = {
   title: "Rosaine Academy",
@@ -21,7 +23,9 @@ export default function RootLayout({
       <body className="flex flex-col min-h-screen font-sans">
         <Header />
         <main className="flex-grow container mx-auto px-4 py-6">
-          {children}
+          <MathJaxContext version={3} config={mathJaxConfig}>
+            {children}
+          </MathJaxContext>
         </main>
         <Footer />
       </body>

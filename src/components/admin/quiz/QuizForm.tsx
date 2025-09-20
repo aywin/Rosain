@@ -1,53 +1,34 @@
 // QuizForm.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { db } from "@/firebase";
-import { collection, getDocs, addDoc, query, where } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 
 import QuizMetaForm from "./QuizMetaForm";
 import QuizQuestionsForm from "./QuizQuestionsForm";
 import { Course, Video, Question } from "./types";
 
-export default function QuizForm() {
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState("");
-  const [selectedVideo, setSelectedVideo] = useState("");
+interface QuizFormProps {
+  courses: Course[];
+  videos: Video[];
+  selectedCourse: string;
+  setSelectedCourse: React.Dispatch<React.SetStateAction<string>>;
+  selectedVideo: string;
+  setSelectedVideo: React.Dispatch<React.SetStateAction<string>>;
+}
+
+export default function QuizForm({
+  courses,
+  videos,
+  selectedCourse,
+  setSelectedCourse,
+  selectedVideo,
+  setSelectedVideo,
+}: QuizFormProps) {
   const [minute, setMinute] = useState("");
   const [second, setSecond] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
-
-  useEffect(() => {
-    const fetchCourses = async () => {
-      const snapshot = await getDocs(collection(db, "courses"));
-      setCourses(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          title: doc.data().title as string,
-        }))
-      );
-    };
-    fetchCourses();
-  }, []);
-
-  useEffect(() => {
-    const fetchVideos = async () => {
-      if (!selectedCourse) return;
-      const q = query(
-        collection(db, "videos"),
-        where("courseId", "==", selectedCourse)
-      );
-      const snapshot = await getDocs(q);
-      setVideos(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          title: doc.data().title as string,
-        }))
-      );
-    };
-    fetchVideos();
-  }, [selectedCourse]);
 
   const addQuestion = () => {
     setQuestions((prev) => [
@@ -98,11 +79,10 @@ export default function QuizForm() {
 
     alert("Quiz enregistré !");
     setQuestions([]);
-    setSelectedCourse("");
-    setSelectedVideo("");
-    setVideos([]);
     setMinute("");
     setSecond("");
+    setSelectedCourse(""); // facultatif si tu veux reset la sélection
+    setSelectedVideo("");
   };
 
   return (

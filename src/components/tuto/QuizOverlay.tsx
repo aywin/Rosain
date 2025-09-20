@@ -1,7 +1,8 @@
-
 "use client";
 
 import { useState } from "react";
+import { MathJax } from "better-react-mathjax";
+import { FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 
 interface Answer {
   text: string;
@@ -24,7 +25,7 @@ interface QuizOverlayProps {
   quiz: Quiz;
   selectedAnswers: Record<number, number>;
   onAnswerChange: (qIndex: number, aIndex: number) => void;
-  onSubmit: (timestamp: number) => void; // Modifier pour passer le timestamp
+  onSubmit: (timestamp: number) => void;
 }
 
 export default function QuizOverlay({
@@ -33,152 +34,138 @@ export default function QuizOverlay({
   onAnswerChange,
   onSubmit,
 }: QuizOverlayProps) {
-  // État pour gérer les différents modes : answering (réponse), success (tout correct), failed (erreurs), correction (afficher corrigé)
   const [quizState, setQuizState] = useState<"answering" | "success" | "failed" | "correction">("answering");
 
-  // Vérifier si toutes les questions ont une réponse
-  const allAnswered =
-    quiz.questions.length > 0 &&
-    quiz.questions.every((_, i) => selectedAnswers[i] !== undefined);
+  const allAnswered = quiz.questions.every((_, i) => selectedAnswers[i] !== undefined);
 
-  // Vérifier si toutes les réponses sélectionnées sont correctes
   const allCorrect = quiz.questions.every(
     (q, i) => q.answers[selectedAnswers[i]]?.correct
   );
 
-  // Gérer la validation des réponses
   const handleValidation = () => {
     if (!allAnswered) return;
     setQuizState(allCorrect ? "success" : "failed");
   };
 
-  // Gérer l'action "Recommencer"
   const handleRetry = () => {
     setQuizState("answering");
-    quiz.questions.forEach((_, i) => onAnswerChange(i, -1)); // -1 pour effacer les sélections
+    quiz.questions.forEach((_, i) => onAnswerChange(i, -1));
   };
 
-  // Gérer l'action "Voir le corrigé"
-  const handleShowCorrection = () => {
-    setQuizState("correction");
-  };
-
-  // Gérer l'action "Continuer la vidéo"
+  const handleShowCorrection = () => setQuizState("correction");
   const handleContinue = () => {
     setQuizState("answering");
-    onSubmit(quiz.timestamp + 1); // Reprendre juste après le timestamp du quiz
+    onSubmit(quiz.timestamp + 1);
   };
 
   return (
-    <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center p-4 text-white z-50">
-      <h3 className="text-xl font-bold mb-4">Quiz !</h3>
+    <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="w-full max-w-3xl max-h-[80vh] overflow-auto flex flex-col items-center
+                      bg-gradient-to-tr from-[#0D1B2A]/80 via-[#1B9AAA]/50 to-[#FF9F43]/30 
+                      rounded-3xl shadow-2xl p-6 text-white animate-fade-in">
+        
+        <h3 className="text-3xl font-bold mb-6 text-center animate-pulse">🎯 Quiz !</h3>
 
-      {/* Afficher les questions */}
-      {quiz.questions.map((q, qIndex) => (
-        <div key={qIndex} className="mb-4 w-full max-w-lg">
-          <p className="mb-2 font-medium">{q.text}</p>
+        {quiz.questions.map((q, qIndex) => (
+          <div key={qIndex} className="mb-6 w-full">
+            <p className="mb-3 font-semibold text-lg">{q.text}</p>
+            <div className="flex flex-col gap-3">
+              {q.answers.map((a, aIndex) => {
+                const isSelected = selectedAnswers[qIndex] === aIndex;
+                const isCorrect = a.correct;
+                let optionClass = "flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all border-2";
 
-          {q.answers.map((a, aIndex) => {
-            const isSelected = selectedAnswers[qIndex] === aIndex;
-            const isCorrect = a.correct;
+                if (quizState === "answering") {
+                  optionClass += isSelected ? " bg-blue-600 border-blue-400" : " hover:bg-blue-500 border-gray-300";
+                } else if (quizState === "correction") {
+                  if (isCorrect) optionClass += " bg-green-700 border-green-400";
+                  else if (isSelected && !isCorrect) optionClass += " bg-red-700 border-red-400";
+                  else optionClass += " bg-gray-800 border-gray-700";
+                }
 
-            let optionClass = "block mb-1 p-2 rounded flex items-center";
-            let icon = null;
+                return (
+                  <label key={aIndex} className={optionClass}>
+                    {quizState === "answering" && (
+                      <input
+                        type="radio"
+                        name={`q-${qIndex}`}
+                        checked={isSelected}
+                        onChange={() => onAnswerChange(qIndex, aIndex)}
+                        className="mr-3 w-5 h-5 accent-blue-400"
+                        disabled={quizState !== "answering"}
+                      />
+                    )}
+                    {quizState !== "answering" && (
+                      <span className="mr-2 text-lg">
+                        {isCorrect ? <FaCheckCircle className="text-green-300"/> :
+                         isSelected ? <FaTimesCircle className="text-red-300"/> : null}
+                      </span>
+                    )}
+                    <span>{a.text}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
 
-            if (quizState === "correction") {
-              if (isCorrect) {
-                optionClass += " bg-green-600";
-                icon = <span className="mr-2">✔</span>; // Coche pour réponse correcte
-              } else if (isSelected && !isCorrect) {
-                optionClass += " bg-red-600";
-                icon = <span className="mr-2">✘</span>; // Croix pour réponse incorrecte
-              } else {
-                optionClass += " bg-gray-700";
-              }
-            } else if (quizState === "answering") {
-              optionClass += isSelected ? " bg-gray-700" : " hover:bg-gray-700";
-            } else {
-              optionClass += " bg-gray-700"; // Non interactif dans success/failed
-            }
-
-            return (
-              <label key={aIndex} className={optionClass}>
-                {quizState === "answering" && (
-                  <input
-                    type="radio"
-                    name={`q-${qIndex}`}
-                    checked={isSelected}
-                    onChange={() => onAnswerChange(qIndex, aIndex)}
-                    className="mr-2"
-                    disabled={quizState !== "answering"}
-                  />
-                )}
-                {icon}
-                {a.text}
-              </label>
-            );
-          })}
-        </div>
-      ))}
-
-      {/* Afficher les boutons en fonction de l'état */}
-      {quizState === "answering" && (
-        <button
-          className={`mt-2 px-4 py-2 rounded ${
-            allAnswered
-              ? "bg-green-500 hover:bg-green-600"
-              : "bg-gray-500 cursor-not-allowed"
-          }`}
-          onClick={handleValidation}
-          disabled={!allAnswered}
-        >
-          Valider
-        </button>
-      )}
-
-      {quizState === "success" && (
-        <div className="text-center">
-          <p className="text-green-400 mb-4">Félicitations, toutes vos réponses sont correctes !</p>
+        {/* Boutons */}
+        {quizState === "answering" && (
           <button
-            className="mt-2 bg-blue-500 px-4 py-2 rounded hover:bg-blue-600"
-            onClick={handleContinue}
+            className={`mt-4 px-6 py-3 rounded-xl font-bold text-white transition
+                        ${allAnswered ? "bg-gradient-to-r from-[#1B9AAA] to-[#FF9F43] hover:opacity-90" 
+                                     : "bg-gray-500 cursor-not-allowed"}`}
+            onClick={handleValidation}
+            disabled={!allAnswered}
           >
-            Continuer la vidéo →
+            Valider ✅
           </button>
-        </div>
-      )}
+        )}
 
-      {quizState === "failed" && (
-        <div className="text-center">
-          <p className="text-red-400 mb-4">Certaines réponses sont incorrectes.</p>
-          <div className="flex gap-4">
+        {quizState === "success" && (
+          <div className="text-center mt-4">
+            <p className="text-green-400 font-bold mb-3 text-xl animate-pulse">🎉 Bravo ! Toutes vos réponses sont correctes !</p>
             <button
-              className="mt-2 bg-yellow-500 px-4 py-2 rounded hover:bg-yellow-600"
-              onClick={handleRetry}
+              className="bg-gradient-to-r from-[#1B9AAA] to-[#FF9F43] px-6 py-3 rounded-xl font-semibold hover:opacity-90"
+              onClick={handleContinue}
             >
-              Recommencer
-            </button>
-            <button
-              className="mt-2 bg-blue-500 px-4 py-2 rounded hover:bg-blue-600"
-              onClick={handleShowCorrection}
-            >
-              Voir le corrigé
+              Continuer la vidéo →
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {quizState === "correction" && (
-        <div className="text-center">
-          <p className="mb-4">Voici le corrigé :</p>
-          <button
-            className="mt-2 bg-blue-500 px-4 py-2 rounded hover:bg-blue-600"
-            onClick={handleContinue}
-          >
-            Continuer la vidéo →
-          </button>
-        </div>
-      )}
+        {quizState === "failed" && (
+          <div className="text-center mt-4 flex flex-col items-center gap-3">
+            <p className="text-red-400 font-semibold text-lg">⚠️ Certaines réponses sont incorrectes.</p>
+            <div className="flex gap-4 flex-wrap justify-center">
+              <button
+                className="bg-yellow-500 px-5 py-2 rounded-xl font-semibold hover:bg-yellow-600"
+                onClick={handleRetry}
+              >
+                Recommencer 🔄
+              </button>
+              <button
+                className="bg-gradient-to-r from-[#1B9AAA] to-[#FF9F43] px-5 py-2 rounded-xl font-semibold hover:opacity-90"
+                onClick={handleShowCorrection}
+              >
+                Voir le corrigé 📖
+              </button>
+            </div>
+          </div>
+        )}
+
+        {quizState === "correction" && (
+          <div className="text-center mt-4">
+            <p className="mb-4 font-medium">Voici le corrigé :</p>
+            <button
+              className="bg-gradient-to-r from-[#1B9AAA] to-[#FF9F43] px-6 py-2 rounded-xl font-semibold hover:opacity-90"
+              onClick={handleContinue}
+            >
+              Continuer la vidéo →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

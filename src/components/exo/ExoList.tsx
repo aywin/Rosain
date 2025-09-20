@@ -64,11 +64,9 @@ export default function ExoList() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
-
-
-  <ExoFilters
-    levels={levels}
-    subjects={subjects}
+      <ExoFilters
+        levels={levels}
+        subjects={subjects}
     courses={courses}
     levelId={levelId}
     subjectId={subjectId}

@@ -41,7 +41,7 @@ type ContentItem =
 
 export default function TutoPage() {
   const params = useParams<{ id: string }>();
-  if (!params?.id) return <div className="p-12 text-red-500">ID manquant</div>;
+  if (!params?.id) return <div className="p-12 text-[#FF6B6B]">ID manquant</div>;
   const courseId = params.id;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -189,10 +189,22 @@ export default function TutoPage() {
     );
   };
 
-  if (loading) return <div className="p-12">Chargement…</div>;
-  if (!allowed) return <div className="p-12 text-red-500">Accès refusé</div>;
-  if (!course) return <div className="p-12">Cours introuvable</div>;
-  if (content.length === 0) return <div className="p-12">Aucun contenu</div>;
+  if (loading)
+    return (
+      <div className="p-12 text-[#1B9AAA] font-semibold text-lg">Chargement…</div>
+    );
+  if (!allowed)
+    return (
+      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">Accès refusé</div>
+    );
+  if (!course)
+    return (
+      <div className="p-12 text-[#FF9F43] font-semibold text-lg">Cours introuvable</div>
+    );
+  if (content.length === 0)
+    return (
+      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">Aucun contenu</div>
+    );
 
   const currentItem = current !== null ? content[current] : null;
 
@@ -202,7 +214,7 @@ export default function TutoPage() {
       <div
         className={`${
           sidebarOpen ? "block" : "hidden"
-        } fixed top-0 left-0 z-30 h-full w-64 bg-white shadow-lg lg:static lg:block`}
+        } fixed top-0 left-0 z-30 h-full w-64 bg-[#f7f7f7] shadow-lg lg:static lg:block`}
       >
         <Sidebar
           content={content.map(({ id, title, type }) => ({ id, title, type }))}
@@ -227,13 +239,13 @@ export default function TutoPage() {
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/30 z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Contenu principal */}
-      <div className="flex-1 flex flex-col bg-blue-100 relative overflow-y-auto">
+      <div className="flex-1 flex flex-col bg-[#E0F7FA] relative overflow-y-auto">
         <CourseHeader
           titre={course.titre}
           niveau={course.niveau}
@@ -288,7 +300,7 @@ export default function TutoPage() {
               />
             )
           ) : (
-            <div className="text-gray-500 mt-12 text-lg">
+            <div className="text-[#1B1B1B] mt-12 text-lg">
               Veuillez sélectionner un élément.
             </div>
           )}

@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { db, auth } from "@/firebase";
 import CourseCard from "@/components/course/CourseCard";
 import { mapCourseWithNames } from "@/utils/mapCourse";
@@ -25,6 +20,17 @@ interface CourseWithStatus {
 export default function CourseSection() {
   const [courses, setCourses] = useState<CourseWithStatus[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+
+  const colors = {
+  darkBlue: "#25364C",
+  primaryBlue: "#1F77B0",
+  primaryBlueDark: "#1B5E8B",
+  primaryBlueHover: "#155E8B",
+  lightGray: "#3c6691a1",
+  softHover: "#E5F0FA",
+  white: "#FFFFFF",
+};
+
 
   // récupération utilisateur connecté
   useEffect(() => {
@@ -51,7 +57,6 @@ export default function CourseSection() {
           let progressStatus: "not_started" | "in_progress" | "done" = "not_started";
 
           if (userId) {
-            // Vérifier inscription
             const qEnroll = query(
               collection(db, "enrollments"),
               where("id_user", "==", userId),
@@ -60,7 +65,6 @@ export default function CourseSection() {
             const enrollSnap = await getDocs(qEnroll);
             enrolled = !enrollSnap.empty;
 
-            // Vérifier progression
             const qProgress = query(
               collection(db, "progress"),
               where("id_user", "==", userId),
@@ -98,9 +102,11 @@ export default function CourseSection() {
   const remaining = courses.length - 3;
 
   return (
-    <section className="bg-[oklch(97%_0.04_350)] py-14 px-4 text-[oklch(25%_0.02_250)]">
+    <section style={{ backgroundColor: colors.lightGray }} className="py-14 px-4 text-[oklch(25%_0.02_250)]">
       <div className="max-w-6xl mx-auto">
-        <h2 className="text-3xl font-semibold mb-8 text-center">Cours populaires</h2>
+        <h2 style={{ color: colors.darkBlue }} className="text-3xl font-semibold mb-8 text-center">
+          Cours populaires
+        </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {visibleCourses.map((course) => (
@@ -108,7 +114,10 @@ export default function CourseSection() {
           ))}
 
           {remaining > 0 && (
-            <div className="flex items-center justify-center bg-white rounded-xl shadow p-6 text-lg font-medium text-[oklch(30%_0.02_250)]">
+            <div
+              style={{ color: colors.white, backgroundColor: colors.primaryBlueDark }}
+              className="flex items-center justify-center rounded-xl shadow p-6 text-lg font-medium hover:bg-[#155E8B] transition-colors duration-200"
+            >
               +{remaining}
             </div>
           )}

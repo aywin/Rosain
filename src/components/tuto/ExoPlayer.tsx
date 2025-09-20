@@ -3,20 +3,24 @@
 import { useState, useEffect } from "react";
 import { db } from "@/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { FaSpinner } from "react-icons/fa";
+import { FaSpinner, FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import { MathJax, MathJaxContext } from "better-react-mathjax";
 import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 
-interface Option { text: string; isCorrect: boolean; }
-interface Question { question: string; options: Option[]; }
-
+interface Option {
+  text: string;
+  isCorrect: boolean;
+}
+interface Question {
+  question: string;
+  options: Option[];
+}
 interface Exo {
   id: string;
   title: string;
   questions: Question[];
   courseId: string;
 }
-
 interface ExoPlayerProps {
   exoId: string;
   onNext?: () => void;
@@ -29,6 +33,7 @@ export default function ExoPlayer({ exoId, onNext }: ExoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [score, setScore] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
+  const [currentQ, setCurrentQ] = useState(0);
 
   // Charger l'exercice
   useEffect(() => {
@@ -83,8 +88,8 @@ export default function ExoPlayer({ exoId, onNext }: ExoPlayerProps) {
 
     exo.questions.forEach((q, qIdx) => {
       const chosen = answers[`${exoId}-${qIdx}`] || [];
-      const allCorrect = q.options.every((opt, optIdx) =>
-        chosen.includes(optIdx) === opt.isCorrect
+      const allCorrect = q.options.every(
+        (opt, optIdx) => chosen.includes(optIdx) === opt.isCorrect
       );
       if (allCorrect) score++;
       result.push(allCorrect);
@@ -100,90 +105,164 @@ export default function ExoPlayer({ exoId, onNext }: ExoPlayerProps) {
     setResults([]);
     setScore(null);
     setTotal(null);
+    setCurrentQ(0);
     localStorage.removeItem(`exoAnswers-${exoId}`);
     localStorage.removeItem(`exoResults-${exoId}`);
   };
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <FaSpinner className="animate-spin text-blue-600 text-3xl" />
+      <div className="flex justify-center items-center py-16">
+        <FaSpinner className="animate-spin text-[#1B9AAA] text-4xl" />
       </div>
     );
   }
 
-  if (!exo) return <div className="p-6 text-red-500">Exercice introuvable.</div>;
+  if (!exo) return <div className="p-6 text-[#FF6B6B]">Exercice introuvable.</div>;
+
+  const currentQuestion = exo.questions[currentQ];
+  const answered = answers[`${exoId}-${currentQ}`] || [];
+  const submitted = results.length > 0;
 
   return (
     <MathJaxContext version={3} config={mathJaxConfig}>
-      <div className="p-6 w-full max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">📝 {exo.title}</h1>
+      <div
+        className="p-6 w-full max-w-3xl mx-auto bg-gradient-to-br from-[#0D1B2A]/5 
+                   via-white to-[#FF9F43]/10 rounded-2xl shadow-lg border border-gray-200 origin-top"
+        style={{ transform: "scale(0.8)" }}
+      >
+        <h1 className="text-2xl font-bold mb-6 text-center text-[#0D1B2A]">
+          📝 {exo.title}
+        </h1>
 
-        {score !== null && total !== null && (
-          <div className="mb-6 p-4 bg-blue-100 text-blue-800 rounded-lg">
-            <p className="font-semibold">Score : {score}/{total}</p>
-          </div>
-        )}
+        {/* Barre de progression */}
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+          <div
+            className="h-2 rounded-full transition-all"
+            style={{
+              width: `${((currentQ + 1) / exo.questions.length) * 100}%`,
+              background: `linear-gradient(to right, #1B9AAA, #FF9F43)`,
+            }}
+          />
+        </div>
+        <p className="text-sm text-gray-600 mb-6 text-center">
+          Questions {currentQ + 1} sur {exo.questions.length}
+        </p>
 
-        {exo.questions.map((q, qIdx) => (
-          <div key={qIdx} className="space-y-4">
-            <p className="font-medium text-lg">
-              {qIdx + 1}. <MathJax dynamic>{q.question}</MathJax>
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {q.options.map((opt, optIdx) => (
+        {/* Question */}
+        <div className="bg-white shadow-md p-6 rounded-xl mb-6 border border-gray-100">
+          <p className="font-medium text-lg mb-4 text-[#0D1B2A]">
+            {currentQ + 1}. <MathJax dynamic>{currentQuestion.question}</MathJax>
+          </p>
+          <div className="grid grid-cols-1 gap-4">
+            {currentQuestion.options.map((opt, optIdx) => {
+              const isChecked = answered.includes(optIdx);
+              const isCorrect = opt.isCorrect;
+              const showResult = submitted;
+
+              return (
                 <label
                   key={optIdx}
-                  className={`flex items-center gap-2 p-4 rounded cursor-pointer transition-colors ${
-                    results.length > 0
-                      ? answers[`${exoId}-${qIdx}`]?.includes(optIdx)
-                        ? opt.isCorrect
-                          ? "bg-green-100 border-green-500"
-                          : "bg-red-100 border-red-500"
-                        : ""
-                      : "hover:bg-gray-100"
-                  }`}
+                  className={`flex items-center gap-3 p-4 rounded-lg cursor-pointer transition-all border
+                    ${
+                      showResult
+                        ? isChecked && isCorrect
+                          ? "bg-[#1B9AAA]/20 border-[#1B9AAA]"
+                          : isChecked && !isCorrect
+                          ? "bg-[#FF6B6B]/20 border-[#FF6B6B]"
+                          : "border-gray-300"
+                        : "hover:bg-[#1B9AAA]/10 border-gray-300"
+                    }`}
                 >
                   <input
                     type="checkbox"
-                    checked={answers[`${exoId}-${qIdx}`]?.includes(optIdx) || false}
-                    onChange={() => handleAnswer(qIdx, optIdx)}
-                    disabled={results.length > 0}
+                    checked={isChecked}
+                    onChange={() => handleAnswer(currentQ, optIdx)}
+                    disabled={showResult}
                   />
-                  <span><MathJax dynamic>{opt.text}</MathJax></span>
+                  <span className="flex items-center gap-2 text-[#0D1B2A]">
+                    <MathJax dynamic>{opt.text}</MathJax>
+                    {showResult && isChecked && isCorrect && (
+                      <FaCheckCircle className="text-[#1B9AAA]" />
+                    )}
+                    {showResult && isChecked && !isCorrect && (
+                      <FaTimesCircle className="text-[#FF6B6B]" />
+                    )}
+                  </span>
                 </label>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
 
-        <div className="flex gap-3 mt-6">
+        {/* Navigation entre questions */}
+        <div className="flex justify-between items-center mt-4">
           <button
-            onClick={handleSubmit}
-            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={results.length > 0}
+            onClick={() => setCurrentQ((q) => Math.max(0, q - 1))}
+            className="bg-gray-200 text-[#0D1B2A] px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+            disabled={currentQ === 0}
           >
-            Soumettre
+            ← Précédent
           </button>
-          {results.length > 0 && (
-            <>
+          {currentQ < exo.questions.length - 1 ? (
+            <button
+              onClick={() => setCurrentQ((q) => Math.min(exo.questions.length - 1, q + 1))}
+              className="px-6 py-2 rounded-lg shadow text-white"
+              style={{ background: "linear-gradient(to right, #1B9AAA, #FF9F43)" }}
+            >
+              Suivant →
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 rounded-lg shadow text-white disabled:bg-gray-400"
+              style={{ background: "linear-gradient(to right, #1B9AAA, #FF9F43)" }}
+              disabled={submitted}
+            >
+              Soumettre
+            </button>
+          )}
+        </div>
+
+        {/* Résultats */}
+        {score !== null && total !== null && (
+          <div
+            className="mt-8 p-6 rounded-xl shadow-md text-center"
+            style={{
+              background: "linear-gradient(135deg, #1B9AAA20, #FF6B6B10, #FF9F4320)",
+              border: "1px solid #1B9AAA50",
+            }}
+          >
+            <p className="font-bold text-lg text-[#0D1B2A]">
+              Score : {score}/{total} ({Math.round((score / total) * 100)}%)
+            </p>
+            <p className="mt-2 text-sm text-[#0D1B2A]">
+              {score / total >= 0.8
+                ? "Excellent 🚀"
+                : score / total >= 0.5
+                ? "Bien joué 👌"
+                : "Continue à t’entraîner 💪"}
+            </p>
+
+            <div className="flex justify-center gap-3 mt-6">
               <button
                 onClick={handleReset}
-                className="mt-4 bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700"
+                className="bg-[#0D1B2A] text-white px-6 py-2 rounded-lg hover:bg-[#1B9AAA]"
               >
                 Recommencer
               </button>
               {onNext && (
                 <button
                   onClick={onNext}
-                  className="mt-4 bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700"
+                  className="px-6 py-2 rounded-lg shadow text-white"
+                  style={{ background: "linear-gradient(to right, #1B9AAA, #FF9F43)" }}
                 >
                   Continuer →
                 </button>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
     </MathJaxContext>
   );

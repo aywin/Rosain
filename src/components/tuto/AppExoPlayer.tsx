@@ -1,171 +1,100 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { db } from "@/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { FaSpinner } from "react-icons/fa";
+import React, { useState } from "react";
+import { X } from "lucide-react";
+import { AppExo } from "@/type/appexo";
 
-interface Option { text: string; isCorrect: boolean; }
-interface Question { question: string; options: Option[]; }
-
-interface Exo {
-  id: string;
-  title: string;
-  questions: Question[];
+interface AppExoPlayerProps {
+  exo: AppExo;
   courseId: string;
+  onClose: () => void;
+  onComplete?: (exoId: string) => void;
 }
 
-interface ExoPlayerProps {
-  exoId: string;
-}
-
-export default function ExoPlayer({ exoId }: ExoPlayerProps) {
-  const [exo, setExo] = useState<Exo | null>(null);
-  const [answers, setAnswers] = useState<{ [key: string]: number | null }>({});
-  const [results, setResults] = useState<boolean[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [score, setScore] = useState<number | null>(null);
-  const [total, setTotal] = useState<number | null>(null);
-
-  // Charger l'exercice depuis Firestore
-  useEffect(() => {
-    const fetchExo = async () => {
-      if (!exoId) return;
-      setIsLoading(true);
-      try {
-        const exoDoc = await getDoc(doc(db, "app_exercises", exoId));
-        if (exoDoc.exists()) {
-          setExo({ id: exoDoc.id, ...exoDoc.data() } as Exo);
-        } else {
-          setExo(null);
-        }
-      } catch (err) {
-        console.error("Erreur ExoPlayer:", err);
-        setExo(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchExo();
-  }, [exoId]);
-
-  // Charger / Sauver les réponses dans localStorage
-  useEffect(() => {
-    if (!exoId) return;
-    const savedAnswers = localStorage.getItem(`exoAnswers-${exoId}`);
-    if (savedAnswers) setAnswers(JSON.parse(savedAnswers));
-
-    const savedResults = localStorage.getItem(`exoResults-${exoId}`);
-    if (savedResults) setResults(JSON.parse(savedResults));
-  }, [exoId]);
-
-  useEffect(() => {
-    if (!exoId) return;
-    localStorage.setItem(`exoAnswers-${exoId}`, JSON.stringify(answers));
-    localStorage.setItem(`exoResults-${exoId}`, JSON.stringify(results));
-  }, [answers, results, exoId]);
+export default function AppExoPlayer({ exo, courseId, onClose, onComplete }: AppExoPlayerProps) {
+  const [completed, setCompleted] = useState(false);
+  const [answers, setAnswers] = useState<{ [key: number]: number | null }>({}); // qIdx: optionIdx
 
   const handleAnswer = (qIdx: number, optIdx: number) => {
-    setAnswers((prev) => ({ ...prev, [`${exoId}-${qIdx}`]: optIdx }));
+    if (!completed) {
+      setAnswers(prev => ({ ...prev, [qIdx]: optIdx }));
+    }
   };
 
-  const handleSubmit = () => {
-    if (!exo) return;
-    let score = 0;
-    const total = exo.questions.length;
-    const result: boolean[] = [];
+  const handleComplete = () => {
+    setCompleted(true);
 
-    exo.questions.forEach((q, qIdx) => {
-      const chosen = answers[`${exoId}-${qIdx}`];
-      const isCorrect = chosen != null && q.options[chosen]?.isCorrect;
-      if (isCorrect) score++;
-      result.push(isCorrect);
-    });
+    // Calculer le score si questions disponibles
+    if (exo.questions && exo.questions.length > 0) {
+      let score = 0;
+      exo.questions.forEach((q, idx) => {
+        const chosen = answers[idx];
+        if (chosen != null && q.options[chosen]?.isCorrect) score++;
+      });
+      alert(`Score pour "${exo.title}" : ${score}/${exo.questions.length}`);
+    }
 
-    setResults(result);
-    setScore(score);
-    setTotal(total);
+    if (onComplete) onComplete(exo.id);
   };
-
-  const handleReset = () => {
-    setAnswers({});
-    setResults([]);
-    setScore(null);
-    setTotal(null);
-    localStorage.removeItem(`exoAnswers-${exoId}`);
-    localStorage.removeItem(`exoResults-${exoId}`);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <FaSpinner className="animate-spin text-blue-600 text-3xl" />
-      </div>
-    );
-  }
-
-  if (!exo) {
-    return <div className="p-6 text-red-500">Exercice introuvable.</div>;
-  }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">📝 {exo.title}</h1>
-      <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm">
-        {score !== null && total !== null && (
-          <div className="mb-6 p-4 bg-blue-100 text-blue-800 rounded-lg">
-            <p className="font-semibold">
-              Score : {score}/{total}
-            </p>
-          </div>
-        )}
-
-        {exo.questions.map((q, qIdx) => (
-          <div key={qIdx} className="space-y-3">
-            <p className="font-medium text-lg">
-              {qIdx + 1}. {q.question}
-            </p>
-            {q.options.map((opt, optIdx) => (
-              <label
-                key={optIdx}
-                className={`flex items-center gap-2 p-3 rounded cursor-pointer transition-colors ${
-                  results.length > 0
-                    ? answers[`${exoId}-${qIdx}`] === optIdx
-                      ? opt.isCorrect
-                        ? "bg-green-100 border-green-500"
-                        : "bg-red-100 border-red-500"
-                      : ""
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={`${exoId}-${qIdx}`}
-                  checked={answers[`${exoId}-${qIdx}`] === optIdx}
-                  onChange={() => handleAnswer(qIdx, optIdx)}
-                  disabled={results.length > 0}
-                />
-                <span>{opt.text}</span>
-              </label>
-            ))}
-          </div>
-        ))}
-
-        <div className="flex gap-3">
-          <button
-            onClick={handleSubmit}
-            className="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={results.length > 0 || !exo.questions.every((_, qIdx) => answers[`${exoId}-${qIdx}`] != null)}
-          >
-            Soumettre
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center border-b px-4 py-3">
+          <h2 className="font-bold text-lg">📝 {exo.title}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+            <X className="w-5 h-5" />
           </button>
-          {results.length > 0 && (
+        </div>
+
+        {/* Contenu de l’exo */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {exo.questions && exo.questions.length > 0 ? (
+            <div className="prose max-w-none">
+              {exo.questions.map((q, idx) => (
+                <div key={idx} className="mb-4">
+                  <p className="font-semibold">{q.question}</p>
+                  <ul>
+                    {q.options.map((opt, optIdx) => (
+                      <li key={optIdx}>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`q-${idx}`}
+                            checked={answers[idx] === optIdx}
+                            disabled={completed}
+                            onChange={() => handleAnswer(idx, optIdx)}
+                          />
+                          {opt.text}
+                          {completed && opt.isCorrect && <span className="text-green-600 ml-2">(Correct)</span>}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : exo.content ? (
+            <div className="prose max-w-none">
+              <p>{exo.content}</p>
+            </div>
+          ) : (
+            <p className="text-gray-500">Aucun contenu ou question pour cet exercice.</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t px-4 py-3 flex justify-end gap-2">
+          {!completed ? (
             <button
-              onClick={handleReset}
-              className="mt-4 bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700"
+              onClick={handleComplete}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              Recommencer
+              Terminer l’exercice
             </button>
+          ) : (
+            <span className="text-green-600 font-semibold">✔ Terminé</span>
           )}
         </div>
       </div>
