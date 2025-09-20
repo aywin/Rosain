@@ -1,34 +1,78 @@
-// QuizForm.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { db } from "@/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, where } from "firebase/firestore";
 
 import QuizMetaForm from "./QuizMetaForm";
 import QuizQuestionsForm from "./QuizQuestionsForm";
 import { Course, Video, Question } from "./types";
 
 interface QuizFormProps {
-  courses: Course[];
-  videos: Video[];
-  selectedCourse: string;
-  setSelectedCourse: React.Dispatch<React.SetStateAction<string>>;
-  selectedVideo: string;
-  setSelectedVideo: React.Dispatch<React.SetStateAction<string>>;
+  courses?: Course[];
+  videos?: Video[];
+  selectedCourse?: string;
+  setSelectedCourse?: (id: string) => void;
+  selectedVideo?: string;
+  setSelectedVideo?: (id: string) => void;
 }
 
 export default function QuizForm({
-  courses,
-  videos,
-  selectedCourse,
-  setSelectedCourse,
-  selectedVideo,
-  setSelectedVideo,
+  courses: initialCourses,
+  videos: initialVideos,
+  selectedCourse: initialSelectedCourse,
+  setSelectedCourse: setParentSelectedCourse,
+  selectedVideo: initialSelectedVideo,
+  setSelectedVideo: setParentSelectedVideo,
 }: QuizFormProps) {
+  const [courses, setCourses] = useState<Course[]>(initialCourses || []);
+  const [videos, setVideos] = useState<Video[]>(initialVideos || []);
+  const [selectedCourse, setSelectedCourse] = useState(initialSelectedCourse || "");
+  const [selectedVideo, setSelectedVideo] = useState(initialSelectedVideo || "");
   const [minute, setMinute] = useState("");
   const [second, setSecond] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
+
+  // Récupérer les cours si non passés en props
+  useEffect(() => {
+    if (initialCourses) return;
+    const fetchCourses = async () => {
+      const snapshot = await getDocs(collection(db, "courses"));
+      setCourses(
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          title: doc.data().title as string,
+        }))
+      );
+    };
+    fetchCourses();
+  }, [initialCourses]);
+
+  // Récupérer les vidéos selon le cours sélectionné si non passées en props
+  useEffect(() => {
+    if (initialVideos || !selectedCourse) return;
+    const fetchVideos = async () => {
+      const q = query(collection(db, "videos"), where("courseId", "==", selectedCourse));
+      const snapshot = await getDocs(q);
+      setVideos(
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          title: doc.data().title as string,
+          courseId: doc.data().courseId as string,
+        }))
+      );
+    };
+    fetchVideos();
+  }, [selectedCourse, initialVideos]);
+
+  // Synchroniser avec le parent si nécessaire
+  useEffect(() => {
+    if (setParentSelectedCourse) setParentSelectedCourse(selectedCourse);
+  }, [selectedCourse, setParentSelectedCourse]);
+
+  useEffect(() => {
+    if (setParentSelectedVideo) setParentSelectedVideo(selectedVideo);
+  }, [selectedVideo, setParentSelectedVideo]);
 
   const addQuestion = () => {
     setQuestions((prev) => [
@@ -79,10 +123,11 @@ export default function QuizForm({
 
     alert("Quiz enregistré !");
     setQuestions([]);
+    setSelectedCourse("");
+    setSelectedVideo("");
+    setVideos([]);
     setMinute("");
     setSecond("");
-    setSelectedCourse(""); // facultatif si tu veux reset la sélection
-    setSelectedVideo("");
   };
 
   return (

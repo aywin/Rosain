@@ -28,21 +28,12 @@ export default function QuizMetaForm({
   second,
   setSecond,
 }: QuizMetaFormProps) {
-  // Filtrage des vidéos selon le cours sélectionné
-  const filteredVideos = selectedCourse
-    ? videos.filter((v) => v.courseId === selectedCourse)
-    : [];
-
   return (
     <>
-      {/* Select cours */}
       <label className="block mb-2 font-semibold">Cours</label>
       <select
         value={selectedCourse}
-        onChange={(e) => {
-          setSelectedCourse(e.target.value);
-          setSelectedVideo(""); // reset vidéo si le cours change
-        }}
+        onChange={(e) => setSelectedCourse(e.target.value)}
         className="border rounded p-2 w-full mb-4"
       >
         <option value="">-- Sélectionnez un cours --</option>
@@ -53,23 +44,24 @@ export default function QuizMetaForm({
         ))}
       </select>
 
-      {/* Select vidéo filtré */}
-      <label className="block mb-2 font-semibold">Vidéo</label>
-      <select
-        value={selectedVideo}
-        onChange={(e) => setSelectedVideo(e.target.value)}
-        className="border rounded p-2 w-full mb-4"
-        disabled={!selectedCourse || filteredVideos.length === 0}
-      >
-        <option value="">-- Sélectionnez une vidéo --</option>
-        {filteredVideos.map((video) => (
-          <option key={video.id} value={video.id}>
-            {video.title}
-          </option>
-        ))}
-      </select>
+      {videos.length > 0 && (
+        <>
+          <label className="block mb-2 font-semibold">Vidéo</label>
+          <select
+            value={selectedVideo}
+            onChange={(e) => setSelectedVideo(e.target.value)}
+            className="border rounded p-2 w-full mb-4"
+          >
+            <option value="">-- Sélectionnez une vidéo --</option>
+            {videos.map((video) => (
+              <option key={video.id} value={video.id}>
+                {video.title}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
 
-      {/* Timestamp */}
       {selectedVideo && (
         <>
           <label className="block mb-2 font-semibold">

@@ -8,7 +8,9 @@ export interface Course {
 export interface Video {
   id: string;
   title: string;
+
 }
+
 
 export interface Answer {
   text: string;

@@ -2,7 +2,6 @@
 "use client";
 
 import { Question } from "./types";
-import LatexInput from "@/components/admin/app/LatexInput";
 
 interface QuizQuestionsFormProps {
   questions: Question[];
@@ -30,49 +29,44 @@ export default function QuizQuestionsForm({
     <>
       <div className="mb-4">
         {questions.map((question, qIndex) => (
-          <div
-            key={qIndex}
-            className="border rounded p-3 mb-4 bg-gray-50 shadow-sm"
-          >
-            {/* Question en LaTeX */}
-            <LatexInput
+          <div key={qIndex} className="border rounded p-3 mb-4 bg-gray-50">
+            <input
+              type="text"
               value={question.text}
-              onChange={(v) => updateQuestionText(qIndex, v)}
+              onChange={(e) => updateQuestionText(qIndex, e.target.value)}
               placeholder={`Question ${qIndex + 1}`}
+              className="border rounded p-2 w-full mb-3"
             />
 
-            {/* Réponses */}
-            <div className="mt-3 space-y-2">
-              {question.answers.map((answer, aIndex) => (
-                <div key={aIndex} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <LatexInput
-                      value={answer.text}
-                      onChange={(v) =>
-                        updateAnswer(qIndex, aIndex, "text", v)
-                      }
-                      placeholder={`Réponse ${aIndex + 1}`}
-                    />
-                  </div>
-                  <label className="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={answer.correct}
-                      onChange={(e) =>
-                        updateAnswer(qIndex, aIndex, "correct", e.target.checked)
-                      }
-                    />
-                    <span className="text-sm">Correcte</span>
-                  </label>
-                </div>
-              ))}
-            </div>
+            {question.answers.map((answer, aIndex) => (
+              <div key={aIndex} className="flex items-center mb-2">
+                <input
+                  type="text"
+                  value={answer.text}
+                  onChange={(e) =>
+                    updateAnswer(qIndex, aIndex, "text", e.target.value)
+                  }
+                  placeholder={`Réponse ${aIndex + 1}`}
+                  className="border rounded p-2 flex-1 mr-2"
+                />
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={answer.correct}
+                    onChange={(e) =>
+                      updateAnswer(qIndex, aIndex, "correct", e.target.checked)
+                    }
+                    className="mr-1"
+                  />
+                  Correcte
+                </label>
+              </div>
+            ))}
 
-            {/* Bouton ajouter réponse */}
             <button
               type="button"
               onClick={() => addAnswer(qIndex)}
-              className="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm"
+              className="bg-blue-500 text-white px-3 py-1 rounded"
             >
               + Ajouter une réponse
             </button>
@@ -80,23 +74,20 @@ export default function QuizQuestionsForm({
         ))}
       </div>
 
-      {/* Actions globales */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={addQuestion}
-          className="bg-green-500 text-white px-4 py-2 rounded"
-        >
-          + Ajouter une question
-        </button>
-        <button
-          type="button"
-          onClick={saveQuiz}
-          className="bg-purple-600 text-white px-4 py-2 rounded"
-        >
-          Sauvegarder le Quiz
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={addQuestion}
+        className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+      >
+        + Ajouter une question
+      </button>
+      <button
+        type="button"
+        onClick={saveQuiz}
+        className="bg-purple-600 text-white px-4 py-2 rounded"
+      >
+        Sauvegarder le Quiz
+      </button>
     </>
   );
 }

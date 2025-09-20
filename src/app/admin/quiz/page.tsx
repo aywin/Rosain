@@ -1,4 +1,3 @@
-// QuizPage.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,13 +12,12 @@ import {
 } from "firebase/firestore";
 
 import QuizForm from "@/components/admin/quiz/QuizForm";
-import { Course, Video, Quiz } from "@/components/admin/quiz/types";
+import { Course, Quiz, Video } from "@/components/admin/quiz/types";
 
 export default function QuizPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string>("");
-  const [selectedVideo, setSelectedVideo] = useState<string>("");
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
 
   // Récupérer les cours
@@ -27,10 +25,7 @@ export default function QuizPage() {
     const fetchCourses = async () => {
       const snapshot = await getDocs(collection(db, "courses"));
       setCourses(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          title: doc.data().title as string,
-        }))
+        snapshot.docs.map((doc) => ({ id: doc.id, title: doc.data().title }))
       );
     };
     fetchCourses();
@@ -41,26 +36,24 @@ export default function QuizPage() {
     const fetchVideos = async () => {
       const snapshot = await getDocs(collection(db, "videos"));
       setVideos(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          title: doc.data().title as string,
-          courseId: doc.data().courseId as string, // nécessaire pour le filtrage
-        }))
+        snapshot.docs.map((doc) => ({ id: doc.id, title: doc.data().title }))
       );
     };
     fetchVideos();
   }, []);
 
-  // Récupérer les quizzes filtrés par cours/vidéo sélectionnés
+  // Récupérer les quizzes (filtrés par cours sélectionné)
   useEffect(() => {
     const fetchQuizzes = async () => {
-      const conditions: any[] = [];
-      if (selectedCourse) conditions.push(where("courseId", "==", selectedCourse));
-      if (selectedVideo) conditions.push(where("videoId", "==", selectedVideo));
-
-      const qRef = conditions.length
-        ? query(collection(db, "quizzes"), ...conditions)
-        : collection(db, "quizzes");
+      let qRef;
+      if (selectedCourse) {
+        qRef = query(
+          collection(db, "quizzes"),
+          where("courseId", "==", selectedCourse)
+        );
+      } else {
+        qRef = collection(db, "quizzes");
+      }
 
       const snapshot = await getDocs(qRef);
       setQuizzes(
@@ -71,7 +64,7 @@ export default function QuizPage() {
       );
     };
     fetchQuizzes();
-  }, [selectedCourse, selectedVideo]);
+  }, [selectedCourse]);
 
   // Supprimer un quiz
   const handleDelete = async (quizId: string) => {
@@ -80,16 +73,11 @@ export default function QuizPage() {
     setQuizzes(quizzes.filter((q) => q.id !== quizId));
   };
 
-  // Récupérer titre d'un cours ou vidéo
+  // Obtenir le titre d'un cours ou d'une vidéo
   const getCourseTitle = (courseId: string) =>
     courses.find((c) => c.id === courseId)?.title || courseId;
   const getVideoTitle = (videoId: string) =>
     videos.find((v) => v.id === videoId)?.title || videoId;
-
-  // Liste des vidéos filtrées selon le cours sélectionné
-  const filteredVideos = selectedCourse
-    ? videos.filter((v) => v.courseId === selectedCourse)
-    : videos;
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-8">
@@ -97,11 +85,9 @@ export default function QuizPage() {
       <div className="bg-white shadow rounded p-6">
         <QuizForm
           courses={courses}
-          videos={filteredVideos}
+          videos={videos}
           selectedCourse={selectedCourse}
           setSelectedCourse={setSelectedCourse}
-          selectedVideo={selectedVideo}
-          setSelectedVideo={setSelectedVideo}
         />
       </div>
 
@@ -117,10 +103,19 @@ export default function QuizPage() {
               className="border p-4 rounded flex justify-between items-center"
             >
               <div>
-                <p><strong>Cours :</strong> {getCourseTitle(quiz.courseId)}</p>
-                <p><strong>Vidéo :</strong> {getVideoTitle(quiz.videoId)}</p>
-                <p><strong>Timestamp :</strong> {Math.floor(quiz.timestamp / 60)}m {quiz.timestamp % 60}s</p>
-                <p><strong>Questions :</strong> {quiz.questions.length}</p>
+                <p>
+                  <strong>Cours :</strong> {getCourseTitle(quiz.courseId)}
+                </p>
+                <p>
+                  <strong>Vidéo :</strong> {getVideoTitle(quiz.videoId)}
+                </p>
+                <p>
+                  <strong>Timestamp :</strong>{" "}
+                  {Math.floor(quiz.timestamp / 60)}m {quiz.timestamp % 60}s
+                </p>
+                <p>
+                  <strong>Questions :</strong> {quiz.questions.length}
+                </p>
               </div>
               <div className="space-x-2">
                 <button
