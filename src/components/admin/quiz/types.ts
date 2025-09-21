@@ -1,5 +1,4 @@
-// components/quiz/types.ts
-
+// types.ts
 export interface Course {
   id: string;
   title: string;
@@ -8,27 +7,19 @@ export interface Course {
 export interface Video {
   id: string;
   title: string;
-
-}
-
-
-export interface Answer {
-  text: string;
-  correct: boolean;
+  courseId: string; // <- ajouter ce champ
 }
 
 export interface Question {
   text: string;
-  answers: Answer[];
+  answers: { text: string; correct: boolean }[];
 }
 
-// Ajouter à types.ts
 export interface Quiz {
   id: string;
   courseId: string;
   videoId: string;
-  timestamp: number; // en secondes
+  timestamp: number;
   questions: Question[];
-  createdAt: any; // Date ou Timestamp Firestore
+  createdAt: Date;
 }
-

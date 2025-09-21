@@ -18,6 +18,7 @@ export default function QuizPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [selectedVideo, setSelectedVideo] = useState<string>("");
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
 
   // Récupérer les cours
@@ -25,7 +26,10 @@ export default function QuizPage() {
     const fetchCourses = async () => {
       const snapshot = await getDocs(collection(db, "courses"));
       setCourses(
-        snapshot.docs.map((doc) => ({ id: doc.id, title: doc.data().title }))
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          title: doc.data().title as string,
+        }))
       );
     };
     fetchCourses();
@@ -36,24 +40,26 @@ export default function QuizPage() {
     const fetchVideos = async () => {
       const snapshot = await getDocs(collection(db, "videos"));
       setVideos(
-        snapshot.docs.map((doc) => ({ id: doc.id, title: doc.data().title }))
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          title: doc.data().title as string,
+          courseId: doc.data().courseId as string,
+        }))
       );
     };
     fetchVideos();
   }, []);
 
-  // Récupérer les quizzes (filtrés par cours sélectionné)
+  // Récupérer les quizzes filtrés par cours et vidéo
   useEffect(() => {
     const fetchQuizzes = async () => {
-      let qRef;
-      if (selectedCourse) {
-        qRef = query(
-          collection(db, "quizzes"),
-          where("courseId", "==", selectedCourse)
-        );
-      } else {
-        qRef = collection(db, "quizzes");
-      }
+      const conditions = [];
+      if (selectedCourse) conditions.push(where("courseId", "==", selectedCourse));
+      if (selectedVideo) conditions.push(where("videoId", "==", selectedVideo));
+
+      const qRef = conditions.length
+        ? query(collection(db, "quizzes"), ...conditions)
+        : collection(db, "quizzes");
 
       const snapshot = await getDocs(qRef);
       setQuizzes(
@@ -64,7 +70,7 @@ export default function QuizPage() {
       );
     };
     fetchQuizzes();
-  }, [selectedCourse]);
+  }, [selectedCourse, selectedVideo]);
 
   // Supprimer un quiz
   const handleDelete = async (quizId: string) => {
@@ -79,15 +85,22 @@ export default function QuizPage() {
   const getVideoTitle = (videoId: string) =>
     videos.find((v) => v.id === videoId)?.title || videoId;
 
+  // Filtrer les vidéos selon le cours sélectionné
+  const filteredVideos = selectedCourse
+    ? videos.filter((v) => v.courseId === selectedCourse)
+    : videos;
+
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-8">
       {/* Formulaire de création */}
       <div className="bg-white shadow rounded p-6">
         <QuizForm
           courses={courses}
-          videos={videos}
+          videos={filteredVideos}
           selectedCourse={selectedCourse}
           setSelectedCourse={setSelectedCourse}
+          selectedVideo={selectedVideo}
+          setSelectedVideo={setSelectedVideo}
         />
       </div>
 
@@ -103,19 +116,10 @@ export default function QuizPage() {
               className="border p-4 rounded flex justify-between items-center"
             >
               <div>
-                <p>
-                  <strong>Cours :</strong> {getCourseTitle(quiz.courseId)}
-                </p>
-                <p>
-                  <strong>Vidéo :</strong> {getVideoTitle(quiz.videoId)}
-                </p>
-                <p>
-                  <strong>Timestamp :</strong>{" "}
-                  {Math.floor(quiz.timestamp / 60)}m {quiz.timestamp % 60}s
-                </p>
-                <p>
-                  <strong>Questions :</strong> {quiz.questions.length}
-                </p>
+                <p><strong>Cours :</strong> {getCourseTitle(quiz.courseId)}</p>
+                <p><strong>Vidéo :</strong> {getVideoTitle(quiz.videoId)}</p>
+                <p><strong>Timestamp :</strong> {Math.floor(quiz.timestamp / 60)}m {quiz.timestamp % 60}s</p>
+                <p><strong>Questions :</strong> {quiz.questions.length}</p>
               </div>
               <div className="space-x-2">
                 <button

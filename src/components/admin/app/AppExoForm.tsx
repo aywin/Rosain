@@ -46,16 +46,21 @@ interface Video {
   title: string;
 }
 
+
+
 interface AppExoFormProps {
   exoToEdit: any;
   setExoToEdit: (exo: any) => void;
   onExoSaved: () => void;
+  onCourseSelected?: (courseId: string) => void; // ✅
 }
+
 
 export default function AppExoForm({
   exoToEdit,
   setExoToEdit,
   onExoSaved,
+   onCourseSelected, // ✅ ajouter ici
 }: AppExoFormProps) {
   const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState<Question[]>([
@@ -204,15 +209,18 @@ export default function AppExoForm({
       </select>
 
       <select
-        value={selectedCourse}
-        onChange={e => setSelectedCourse(e.target.value)}
-        className="border w-full p-2 rounded"
-      >
-        <option value="">-- Sélectionner le cours --</option>
-        {courses.map(c => (
-          <option key={c.id} value={c.id}>{c.title}</option>
-        ))}
-      </select>
+  value={selectedCourse}
+  onChange={(e) => {
+    setSelectedCourse(e.target.value);
+    onCourseSelected?.(e.target.value); // ✅ notifie le parent
+  }}
+  className="border w-full p-2 rounded"
+>
+  <option value="">-- Sélectionner le cours --</option>
+  {courses.map((c) => (
+    <option key={c.id} value={c.id}>{c.title}</option>
+  ))}
+</select>
 
       <select
         value={videoAfter}

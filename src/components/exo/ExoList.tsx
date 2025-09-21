@@ -7,9 +7,21 @@ import ExoFilters from "./ExoFilters";
 import ExoCard from "./ExoCard";
 import { FaSpinner } from "react-icons/fa";
 
-interface Level { id: string; name: string; }
-interface Subject { id: string; name: string; }
-interface Course { id: string; title: string; subject_id: string; level_id: string; order?: number; }
+interface Level {
+  id: string;
+  name: string;
+}
+interface Subject {
+  id: string;
+  name: string;
+}
+interface Course {
+  id: string;
+  title: string;
+  subject_id: string;
+  level_id: string;
+  order?: number;
+}
 interface Exo {
   id: string;
   title: string;
@@ -51,16 +63,33 @@ export default function ExoList() {
         getDocs(collection(db, "exercises")),
       ]);
 
-      setLevels(levelsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Level)));
-      setSubjects(subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subject)));
-
-      // ✅ Trier les cours par order
+      const levelsData = levelsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Level));
+      const subjectsData = subjectsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subject));
       const sortedCourses = coursesSnap.docs
         .map((d) => ({ id: d.id, ...d.data() } as Course))
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      setCourses(sortedCourses);
+      const exosData = exosSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Exo));
 
-      setExos(exosSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Exo)));
+      setLevels(levelsData);
+      setSubjects(subjectsData);
+      setCourses(sortedCourses);
+      setExos(exosData);
+
+      // ✅ Initialiser les filtres par défaut : Terminal + Maths + cours order=1
+      const terminalLevel = levelsData.find((l) => l.name === "Terminal");
+      const mathsSubject = subjectsData.find((s) => s.name === "Maths");
+
+      if (terminalLevel && mathsSubject) {
+        const firstCourse = sortedCourses.find(
+          (c) => c.level_id === terminalLevel.id && c.subject_id === mathsSubject.id && c.order === 1
+        );
+
+        if (firstCourse) {
+          setLevelId(terminalLevel.id);
+          setSubjectId(mathsSubject.id);
+          setCourseId(firstCourse.id);
+        }
+      }
 
       setLoading(false);
     };
@@ -75,7 +104,7 @@ export default function ExoList() {
       </div>
     );
 
-  // 🔹 Filtrage dynamique des cours
+  // 🔹 Filtrage dynamique des cours selon filtres
   const filteredCourses = courses.filter(
     (c) => (!levelId || c.level_id === levelId) && (!subjectId || c.subject_id === subjectId)
   );
@@ -85,7 +114,7 @@ export default function ExoList() {
       <ExoFilters
         levels={levels}
         subjects={subjects}
-        courses={courses}
+        courses={filteredCourses}
         levelId={levelId}
         subjectId={subjectId}
         courseId={courseId}
@@ -108,9 +137,6 @@ export default function ExoList() {
 
           return (
             <div key={course.id}>
-              {/* 🔹 Titre du cours */}
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">{course.title}</h2>
-
               <div className="flex flex-col items-center gap-6">
                 {courseExos.map((exo) => (
                   <div key={exo.id} className="w-full max-w-2xl">

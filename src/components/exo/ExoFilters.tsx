@@ -27,7 +27,17 @@ export default function ExoFilters({
     c => (!levelId || c.level_id === levelId) && (!subjectId || c.subject_id === subjectId)
   );
 
-  const selectClass = "flex items-center gap-1 border border-gray-300 bg-white px-3 py-2 rounded-lg shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 transition text-sm";
+  // Styles pour niveaux et matières
+  const selectClass =
+    "min-w-[200px] border border-gray-300 bg-white px-3 py-2 rounded-lg " +
+    "shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 " +
+    "transition text-sm";
+
+  // Styles spécifiques pour les cours (plus large)
+  const selectCourseClass =
+    "min-w-[280px] max-w-[320px] border border-gray-300 bg-white px-3 py-2 rounded-lg " +
+    "shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 " +
+    "transition text-sm break-words";
 
   return (
     <div className="flex flex-wrap gap-4 mb-6 justify-center">
@@ -40,7 +50,9 @@ export default function ExoFilters({
           onChange={e => { setLevelId(e.target.value); setSubjectId(""); setCourseId(""); }}
         >
           <option value="">Tous niveaux</option>
-          {levels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          {levels.map(l => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
         </select>
       </div>
 
@@ -53,7 +65,9 @@ export default function ExoFilters({
           onChange={e => { setSubjectId(e.target.value); setCourseId(""); }}
         >
           <option value="">Toutes matières</option>
-          {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {subjects.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
         </select>
       </div>
 
@@ -61,12 +75,14 @@ export default function ExoFilters({
       <div className="flex items-center gap-2">
         <FaBook className="text-gray-500" />
         <select
-          className={selectClass}
+          className={selectCourseClass}
           value={courseId}
           onChange={e => setCourseId(e.target.value)}
         >
           <option value="">Tous cours</option>
-          {filteredCourses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+          {filteredCourses.map(c => (
+            <option key={c.id} value={c.id}>{c.title}</option>
+          ))}
         </select>
       </div>
     </div>
