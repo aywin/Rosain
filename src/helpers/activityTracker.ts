@@ -1,7 +1,7 @@
 "use client";
 
 import { db } from "@/firebase";
-import { doc, setDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 interface QuizResponseData {
   quizId: string;
@@ -25,11 +25,26 @@ interface VideoProgressData {
   updatedAt: any;
 }
 
-// 🔹 Enregistrer réponse quiz
+// 🔹 Enregistrer réponse quiz (1ère + dernière)
 export async function logQuizResponse(data: QuizResponseData) {
   try {
-    await addDoc(collection(db, "quizResponses"), {
+    const firstDocRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_first`);
+    const lastDocRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_last`);
+
+    // Vérifie si la première tentative existe
+    const firstSnap = await getDoc(firstDocRef);
+    if (!firstSnap.exists()) {
+      await setDoc(firstDocRef, {
+        ...data,
+        attemptType: "first",
+        submittedAt: serverTimestamp(),
+      });
+    }
+
+    // Toujours mettre à jour le doc "last"
+    await setDoc(lastDocRef, {
       ...data,
+      attemptType: "last",
       submittedAt: serverTimestamp(),
     });
   } catch (err) {
@@ -37,14 +52,33 @@ export async function logQuizResponse(data: QuizResponseData) {
   }
 }
 
-// 🔹 Mettre à jour progression vidéo
+// 🔹 Mettre à jour progression vidéo (ne pas écraser si inférieur)
 export async function logVideoProgress(data: VideoProgressData) {
   try {
     const docId = `${data.userId}_${data.videoId}`;
-    await setDoc(doc(db, "videoProgress", docId), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
+    const docRef = doc(db, "videoProgress", docId);
+
+    // Récupère le doc existant
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      // S'il n'existe pas encore → création
+      await setDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const existingData = docSnap.data() as VideoProgressData;
+
+      // Met à jour uniquement si la nouvelle position est supérieure
+      if (data.lastPosition > existingData.lastPosition) {
+        await setDoc(docRef, {
+          ...data,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      // sinon on ne fait rien
+    }
   } catch (err) {
     console.error("Erreur logVideoProgress:", err);
   }
