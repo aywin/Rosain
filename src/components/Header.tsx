@@ -96,6 +96,9 @@ export default function Header() {
               <Link href="/exercices" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
                 <FileEdit size={16} /> Exercices
               </Link>
+                  <Link href="/mark" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
+        <ClipboardList size={16} /> Ma progression
+      </Link>
             </>
           )}
 
@@ -181,6 +184,10 @@ export default function Header() {
               <Link href="/exercices" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
                 Exercices
               </Link>
+              <Link href="/mark" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
+                Ma progression
+              </Link>
+
             </>
           )}
           <Link href="/about" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
