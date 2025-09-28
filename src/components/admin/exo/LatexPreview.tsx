@@ -33,6 +33,11 @@ export default function LatexPreview({
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
+  // Détection des blocs qui doivent être rendus en display
+  const needsDisplay = (text: string) => {
+    return /\\(sys|align|cases|begin\{.*matrix\})/.test(text);
+  };
+
   return (
     <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-lg shadow-sm">
       <label className="text-md font-semibold text-gray-700">{label}</label>
@@ -60,7 +65,9 @@ export default function LatexPreview({
                   marginBottom: p.includes("\\bigskip") ? "1em" : "inherit",
                 }}
               >
-                <MathJax dynamic>{p}</MathJax>
+                <MathJax dynamic>
+                  {needsDisplay(p) ? `$$${p}$$` : p}
+                </MathJax>
               </p>
             ))}
           </MathJaxContext>

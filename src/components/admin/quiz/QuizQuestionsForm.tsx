@@ -1,7 +1,7 @@
-// QuizQuestionsForm.tsx
 "use client";
 
 import { Question } from "./types";
+import LatexInput from "@/components/admin/app/LatexInput"; // adapte le chemin si nécessaire
 
 interface QuizQuestionsFormProps {
   questions: Question[];
@@ -30,25 +30,25 @@ export default function QuizQuestionsForm({
       <div className="mb-4">
         {questions.map((question, qIndex) => (
           <div key={qIndex} className="border rounded p-3 mb-4 bg-gray-50">
-            <input
-              type="text"
+            {/* Question en LaTeX */}
+            <LatexInput
               value={question.text}
-              onChange={(e) => updateQuestionText(qIndex, e.target.value)}
+              onChange={(val) => updateQuestionText(qIndex, val)}
               placeholder={`Question ${qIndex + 1}`}
-              className="border rounded p-2 w-full mb-3"
             />
 
+            {/* Réponses */}
             {question.answers.map((answer, aIndex) => (
               <div key={aIndex} className="flex items-center mb-2">
-                <input
-                  type="text"
-                  value={answer.text}
-                  onChange={(e) =>
-                    updateAnswer(qIndex, aIndex, "text", e.target.value)
-                  }
-                  placeholder={`Réponse ${aIndex + 1}`}
-                  className="border rounded p-2 flex-1 mr-2"
-                />
+                <div className="flex-1 mr-2">
+                  <LatexInput
+                    value={answer.text}
+                    onChange={(val) =>
+                      updateAnswer(qIndex, aIndex, "text", val)
+                    }
+                    placeholder={`Réponse ${aIndex + 1}`}
+                  />
+                </div>
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -66,7 +66,7 @@ export default function QuizQuestionsForm({
             <button
               type="button"
               onClick={() => addAnswer(qIndex)}
-              className="bg-blue-500 text-white px-3 py-1 rounded"
+              className="bg-blue-500 text-white px-3 py-1 rounded mt-2"
             >
               + Ajouter une réponse
             </button>

@@ -1,86 +1,103 @@
-// components/mark/QuizStats.tsx
+// src/components/mark/QuizStats.tsx
 "use client";
+
 import React from "react";
 import { BookOpen, RotateCcw, CheckCircle } from "lucide-react";
-import { QuizResponse } from "@/utils/progress";
-import { getQuizSuggestion } from "@/utils/progress";
+import {
+  QuizResponse,
+  getQuizStats,
+  getQuizSuggestion,
+  AttemptStats,
+  QuizStats as QuizStatsType,
+} from "@/utils/progress";
 
 interface Props {
   quizzes: QuizResponse[];
-  videoTitles: Record<string, string>;
-  quizStats: {
-    totalQuizzes: number;
-    avgScore: number;
-    totalCorrectAnswers: number;
-    totalMissedAnswers: number;
-  };
+  courseTitles?: Record<string, string>; // optionnel pour afficher les noms des cours
 }
 
-export default function QuizStats({ quizzes, videoTitles, quizStats }: Props) {
-  const suggestion = getQuizSuggestion(quizStats.avgScore);
+export default function QuizStats({ quizzes, courseTitles = {} }: Props) {
+  if (!quizzes || quizzes.length === 0) {
+    return (
+      <div className="p-4 text-center text-gray-500">
+        <BookOpen className="w-6 h-6 mx-auto mb-2" />
+        Aucun quiz réalisé pour l’instant.
+      </div>
+    );
+  }
+
+  const statsByCourse: Record<string, QuizStatsType> = getQuizStats(quizzes);
 
   return (
-    <div className="rounded-lg bg-blue-50 p-4">
-      <div className="mb-2 flex items-center space-x-2">
-        <BookOpen className="h-5 w-5 text-blue-600" />
-        <h3 className="text-xl font-medium text-gray-800">Résumé quizzes</h3>
-      </div>
+    <div className="space-y-6">
+      {Object.entries(statsByCourse).map(([courseId, stats]) => {
+        const first: AttemptStats = stats?.first || {
+          totalQuizzes: 0,
+          avgScore: 0,
+          totalCorrectAnswers: 0,
+          totalAnswers: 0,
+          totalMissedAnswers: 0,
+        };
+        const last: AttemptStats = stats?.last || {
+          totalQuizzes: 0,
+          avgScore: 0,
+          totalCorrectAnswers: 0,
+          totalAnswers: 0,
+          totalMissedAnswers: 0,
+        };
+        const improvement = stats?.improvement || {
+          avgScore: 0,
+          totalCorrectAnswers: 0,
+          totalMissedAnswers: 0,
+        };
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded bg-blue-100 p-3 text-center">
-          <p className="text-sm text-gray-600">Répondus</p>
-          <p className="text-2xl font-bold text-blue-600">{quizStats.totalQuizzes}</p>
-        </div>
-        <div className="rounded bg-green-100 p-3 text-center">
-          <p className="text-sm text-gray-600">Correctes</p>
-          <p className="text-2xl font-bold text-green-600">{quizStats.totalCorrectAnswers}</p>
-        </div>
-        <div className="rounded bg-red-100 p-3 text-center">
-          <p className="text-sm text-gray-600">Ratées</p>
-          <p className="text-2xl font-bold text-red-600">{quizStats.totalMissedAnswers}</p>
-        </div>
-      </div>
+        const suggestion = getQuizSuggestion(first.avgScore, last.avgScore);
 
-      <p className="mt-4 flex items-center text-sm text-gray-700">
-        <RotateCcw className="mr-2 h-4 w-4 text-blue-500" />
-        {suggestion}
-      </p>
+        return (
+          <div key={courseId} className="p-4 bg-white rounded-2xl shadow">
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              {courseTitles[courseId] || `Cours ${courseId}`}
+            </h2>
 
-      {/* Détails quizzes */}
-      <div className="mt-4">
-        <h4 className="text-lg font-medium text-gray-800 mb-2">Détails quizzes</h4>
-        {quizzes.length === 0 ? (
-          <p className="text-gray-500">Aucune réponse enregistrée.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg bg-gray-50 p-4">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-blue-100">
-                  <th className="border-b p-3 text-left text-sm font-semibold text-gray-700">Quiz ID</th>
-                  <th className="border-b p-3 text-left text-sm font-semibold text-gray-700">Vidéo</th>
-                  <th className="border-b p-3 text-left text-sm font-semibold text-gray-700">Score (%)</th>
-                  <th className="border-b p-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quizzes.map((q) => (
-                  <tr key={q.id} className="hover:bg-blue-50 transition-colors">
-                    <td className="border-b p-3 text-sm text-gray-600">{q.quizId}</td>
-                    <td className="border-b p-3 text-sm text-gray-600">{videoTitles[q.videoId || ""] || q.videoId || "N/A"}</td>
-                    <td className="border-b p-3 text-sm text-gray-600">
-                      <span className="flex items-center">
-                        {q.isCorrect ?? 0}%
-                        { (q.isCorrect ?? 0) >= 80 && <CheckCircle className="ml-2 h-4 w-4 text-green-500" /> }
-                      </span>
-                    </td>
-                    <td className="border-b p-3 text-sm text-gray-600">{q.submittedAt?.toDate().toLocaleString() || "N/A"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Statistiques First / Last */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <h3 className="font-medium text-sm text-gray-600">Premiers essais</h3>
+                <p className="text-xl font-bold text-gray-800">{first.avgScore}%</p>
+                <p className="text-xs text-gray-500">
+                  {first.totalCorrectAnswers}/{first.totalAnswers} réponses correctes
+                </p>
+                <p className="text-xs text-gray-400">{first.totalQuizzes} quizzes tentés</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3">
+                <h3 className="font-medium text-sm text-gray-600">Reprises</h3>
+                <p className="text-xl font-bold text-gray-800">{last.avgScore}%</p>
+                <p className="text-xs text-gray-500">
+                  {last.totalCorrectAnswers}/{last.totalAnswers} réponses correctes
+                </p>
+                <p className="text-xs text-gray-400">{last.totalQuizzes} quizzes repris</p>
+              </div>
+            </div>
+
+            {/* Amélioration */}
+            <div className="flex items-center gap-2 mb-4">
+              <RotateCcw className="w-5 h-5 text-blue-600" />
+              <span className="text-sm text-gray-700">
+                Amélioration : {improvement.avgScore} points (
+                {improvement.totalCorrectAnswers} bonnes réponses de plus,{" "}
+                {improvement.totalMissedAnswers} erreurs de moins)
+              </span>
+            </div>
+
+            {/* Suggestion */}
+            <div className="p-3 bg-green-50 rounded-lg text-sm text-green-800">
+              {suggestion}
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 }

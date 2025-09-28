@@ -10,7 +10,7 @@ type Props = {
   placeholder?: string;
 };
 
-// Ajoute $...$ uniquement si nécessaire
+// Ajoute automatiquement $...$ si aucun délimiteur détecté
 function ensureMathDelimiters(v: string): string {
   const hasInlineMath =
     /\$.*\$/.test(v) ||
@@ -24,7 +24,7 @@ function ensureMathDelimiters(v: string): string {
 export default function LatexInput({ value, onChange, placeholder }: Props) {
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Autoriser la sélection du rendu
+  // Rendre le contenu sélectionnable
   useEffect(() => {
     if (previewRef.current) {
       previewRef.current.style.userSelect = "text";
@@ -33,27 +33,27 @@ export default function LatexInput({ value, onChange, placeholder }: Props) {
   }, [value]);
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Champ de saisie compact */}
-      <input
-        type="text"
-        className="border border-gray-300 rounded px-2 py-1 text-sm w-full font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+    <MathJaxContext config={mathJaxConfig}>
+      <div className="flex flex-col gap-1">
+        {/* Champ de saisie */}
+        <input
+          type="text"
+          className="border border-gray-300 rounded px-2 py-1 text-sm w-full font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
 
-      {/* Aperçu compact */}
-      {value && value.trim() && (
-        <div
-          ref={previewRef}
-          className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm text-blue-700 select-text"
-        >
-          <MathJaxContext config={mathJaxConfig}>
+        {/* Aperçu rendu */}
+        {value && value.trim() && (
+          <div
+            ref={previewRef}
+            className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm text-blue-700 select-text"
+          >
             <MathJax dynamic>{ensureMathDelimiters(value)}</MathJax>
-          </MathJaxContext>
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+    </MathJaxContext>
   );
 }

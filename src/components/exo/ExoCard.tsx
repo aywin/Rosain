@@ -3,6 +3,7 @@
 import { MathJax, MathJaxContext } from "better-react-mathjax";
 import React, { useRef, useEffect } from "react";
 import { FaBookOpen, FaCheckCircle, FaTag } from "react-icons/fa";
+import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 
 interface Level { id: string; name: string; }
 interface Subject { id: string; name: string; }
@@ -34,13 +35,29 @@ interface ExoCardProps {
   setOpenSolutionId: (id: string | null) => void;
 }
 
-const mathjaxConfig = { /* (ton config identique) */ };
+// --- Helpers ---
+const needsDisplay = (text: string) => {
+  return /\\(sys|align|cases|begin\{.*matrix\})/.test(text);
+};
 
 const renderParagraphs = (text?: string) => {
   if (!text) return null;
-  return text.split(/\n{2,}/).map((p, i) => (
-    <p key={i} className="mb-3 text-sm leading-snug">
-      <MathJax dynamic>{p}</MathJax>
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  return paragraphs.map((p, i) => (
+    <p
+      key={i}
+      className="mb-3 text-sm leading-snug"
+      style={{
+        marginBottom: p.includes("\\bigskip") ? "1em" : "inherit",
+      }}
+    >
+      <MathJax dynamic>
+        {needsDisplay(p) ? `$$${p}$$` : p}
+      </MathJax>
     </p>
   ));
 };
@@ -55,10 +72,10 @@ export default function ExoCard({
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.style.userSelect = "text";
+      containerRef.current.style.webkitUserSelect = "text";
     }
   }, []);
 
-  // Couleur difficulté
   const diffColors: Record<string, string> = {
     facile: "bg-green-100 text-green-700",
     moyen: "bg-yellow-100 text-yellow-700",
@@ -66,7 +83,7 @@ export default function ExoCard({
   };
 
   return (
-    <MathJaxContext config={mathjaxConfig} version={3}>
+    <MathJaxContext config={mathJaxConfig}>
       <div
         ref={containerRef}
         className="border rounded-xl shadow-md hover:shadow-lg transition bg-white flex flex-col overflow-hidden"
@@ -75,8 +92,6 @@ export default function ExoCard({
         <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-blue-100">
           <h2 className="font-semibold text-lg">{exo.title}</h2>
           {exo.description && <p className="text-gray-600 text-sm mt-1">{exo.description}</p>}
-
-          {/* Difficulty */}
           {exo.difficulty && (
             <span className={`inline-block text-xs px-2 py-0.5 mt-2 rounded ${diffColors[exo.difficulty] || "bg-gray-200"}`}>
               {exo.difficulty.charAt(0).toUpperCase() + exo.difficulty.slice(1)}
@@ -84,33 +99,25 @@ export default function ExoCard({
           )}
         </div>
 
-{/* Infos : niveau / matière / cours */}
-<div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2 px-4">
-  {exo.level_id && (
-    <span className="bg-gray-200 px-2 py-0.5 rounded">{levels.find(l => l.id === exo.level_id)?.name}</span>
-  )}
-  {exo.subject_id && (
-    <span className="bg-gray-200 px-2 py-0.5 rounded">{subjects.find(s => s.id === exo.subject_id)?.name}</span>
-  )}
-  {exo.course_id && (
-    <span className="bg-gray-200 px-2 py-0.5 rounded">{courses.find(c => c.id === exo.course_id)?.title}</span>
-  )}
-</div>
+        {/* Infos */}
+        <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2 px-4">
+          {exo.level_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{levels.find(l => l.id === exo.level_id)?.name}</span>}
+          {exo.subject_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{subjects.find(s => s.id === exo.subject_id)?.name}</span>}
+          {exo.course_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{courses.find(c => c.id === exo.course_id)?.title}</span>}
+        </div>
 
-{/* Tags */}
-{exo.tags && exo.tags.length > 0 && (
-  <div className="flex flex-wrap gap-2 px-4 pt-2 pb-2 border-t mt-2">
-    {exo.tags.map((tag, i) => (
-      <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
-        <FaTag className="text-xs" /> {tag}
-      </span>
-    ))}
-  </div>
-)}
+        {/* Tags */}
+        {exo.tags && exo.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 pt-2 pb-2 border-t mt-2">
+            {exo.tags.map((tag, i) => (
+              <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
+                <FaTag className="text-xs" /> {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
-
-
-        {/* Buttons & Content */}
+        {/* Content */}
         <div className="p-4 border-t space-y-3">
           {/* Statement */}
           {exo.statement_text && (

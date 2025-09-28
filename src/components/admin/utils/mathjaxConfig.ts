@@ -6,6 +6,9 @@ export const mathJaxConfig = {
       "[tex]/textmacros",
       "[tex]/noerrors",
       "[tex]/noundefined",
+      "[tex]/ams",       // pour align, cases, split...
+      "[tex]/amscd",
+      "[tex]/mathtools", // pour pmatrix*, bmatrix*, etc.
     ],
   },
   tex: {
@@ -13,7 +16,9 @@ export const mathJaxConfig = {
     displayMath: [["$$", "$$"], ["\\[", "\\]"]],
     processEscapes: true,
     processEnvironments: true,
-    packages: { "[+]": ["base", "ams", "amscd", "color", "newcommand"] },
+    packages: {
+      "[+]": ["base", "ams", "amscd", "mathtools", "color", "newcommand"],
+    },
     macros: {
       // Ensembles
       R: "\\mathbb{R}",
@@ -34,6 +39,15 @@ export const mathJaxConfig = {
       id: "\\mathrm{Id}",
       det: ["\\det\\left(#1\\right)", 1],
       mat: ["\\begin{bmatrix}#1\\end{bmatrix}", 1],
+
+      // Systèmes / alignements
+      sys: ["\\left\\{\\begin{array}{l}#1\\end{array}\\right.", 1],
+      align: ["\\begin{aligned}#1\\end{aligned}", 1],
+      cases: ["\\begin{cases}#1\\end{cases}", 1],
+
+      // Fractions
+      frac: ["\\dfrac{#1}{#2}", 2],
+      pfrac: ["\\tfrac{#1}{#2}", 2], // petite fraction inline
 
       // Géométrie
       vect: ["{\\overrightarrow{#1}}", 1],
