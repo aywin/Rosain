@@ -7,6 +7,11 @@ import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 export const metadata = {
   title: "Rosaine Academy",
   description: "Apprenez à votre rythme avec Rosaine Academy",
+  icons: {
+    icon: "/logo.png", // Favicon principal
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -17,8 +22,11 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
-        {/* Favicon vide pour bloquer celui de Next.js */}
-        <link rel="icon" href="data:," />
+        {/* Favicon principal */}
+        <link rel="icon" href="/logo.jpg" sizes="any" />
+        <link rel="icon" type="image/jpeg" href="/logo.jpg" />
+        {/* Icône Apple (iPhone/iPad) */}
+        <link rel="apple-touch-icon" href="/logo.jpg" />
       </head>
       <body className="flex flex-col min-h-screen font-sans">
         <Header />

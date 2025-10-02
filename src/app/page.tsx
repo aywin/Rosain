@@ -7,6 +7,8 @@ import { auth, db } from "@/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import CourseSection from "@/components/CourseSection";
 
+import StatsSection from "@/components/GlobalStats";
+
 export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -91,6 +93,8 @@ export default function HomePage() {
 
       {/* Section des cours */}
       <CourseSection />
+      {/* Section des statistiques */}
+      <StatsSection />
 
       {/* Call to action */}
       <section
