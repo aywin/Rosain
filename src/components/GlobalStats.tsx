@@ -21,16 +21,7 @@ export default function StatsSection() {
     fetchUsers();
   }, []);
 
-  const levels = ["Seconde", "Première", "Terminale"];
-  const subjects = [
-    "Maths",
-    "Physique",
-    "Chimie",
-    "SVT",
-    "Français",
-    "Anglais",
-  ];
-
+  
   const stats = [
     {
       title: "Utilisateurs actifs",
@@ -38,18 +29,8 @@ export default function StatsSection() {
       icon: <Users className="w-10 h-10 text-blue-600" />,
       description: "Apprenants engagés chaque jour",
     },
-    {
-      title: "Classes concernées",
-      value: levels.length,
-      icon: <Layers className="w-10 h-10 text-green-600" />,
-      description: levels.join(" • "),
-    },
-    {
-      title: "Matières disponibles",
-      value: subjects.length,
-      icon: <BookOpen className="w-10 h-10 text-purple-600" />,
-      description: subjects.join(" • "),
-    },
+    
+
   ];
 
   return (
