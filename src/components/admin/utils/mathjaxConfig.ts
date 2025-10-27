@@ -6,19 +6,24 @@ export const mathJaxConfig = {
       "[tex]/textmacros",
       "[tex]/noerrors",
       "[tex]/noundefined",
-      "[tex]/ams",       // pour align, cases, split...
+      "[tex]/ams",        // pour align, cases, split...
       "[tex]/amscd",
-      "[tex]/mathtools", // pour pmatrix*, bmatrix*, etc.
+      "[tex]/mathtools",  // pour pmatrix*, bmatrix*, etc.
+      "[tex]/color",      // pour les couleurs
     ],
   },
+
   tex: {
     inlineMath: [["$", "$"], ["\\(", "\\)"]],
     displayMath: [["$$", "$$"], ["\\[", "\\]"]],
     processEscapes: true,
     processEnvironments: true,
+
+    // Activation explicite des packages utiles
     packages: {
-      "[+]": ["base", "ams", "amscd", "mathtools", "color", "newcommand"],
+      "[+]": ["ams", "amscd", "mathtools", "color"],
     },
+
     macros: {
       // Ensembles
       R: "\\mathbb{R}",
@@ -43,7 +48,7 @@ export const mathJaxConfig = {
       // Systèmes / alignements
       sys: ["\\left\\{\\begin{array}{l}#1\\end{array}\\right.", 1],
       align: ["\\begin{aligned}#1\\end{aligned}", 1],
-      cases: ["\\begin{cases}#1\\end{cases}", 1],
+      cases: ["\\left\\{\\begin{array}{l}#1\\end{array}\\right.", 1],
 
       // Fractions
       frac: ["\\dfrac{#1}{#2}", 2],
@@ -55,18 +60,10 @@ export const mathJaxConfig = {
       abs: ["\\left|#1\\right|", 1],
       bar: ["\\overline{#1}", 1],
 
-      // Logique / ensembles
+      // Logique / symboles
       forall: "\\forall",
       exists: "\\exists",
       not: "\\neg",
-      in: "\\in",
-      notin: "\\notin",
-      subset: "\\subset",
-      subseteq: "\\subseteq",
-      supset: "\\supset",
-      supseteq: "\\supseteq",
-      union: "\\cup",
-      inter: "\\cap",
       impl: "\\Rightarrow",
       equiv: "\\Leftrightarrow",
 

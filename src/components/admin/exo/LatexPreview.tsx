@@ -1,7 +1,7 @@
 "use client";
 
 import { MathJax, MathJaxContext } from "better-react-mathjax";
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 
 type Props = {
@@ -23,20 +23,25 @@ export default function LatexPreview({
   useEffect(() => {
     if (previewRef.current) {
       previewRef.current.style.userSelect = "text";
-      previewRef.current.style.webkitUserSelect = "text";
+      (previewRef.current.style as any).webkitUserSelect = "text";
     }
   }, [value]);
 
-  // Découper par double saut de ligne pour simuler des paragraphes
-  const paragraphs = value
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+  // Découper en paragraphes par double saut de ligne
+  const paragraphs = useMemo(
+    () =>
+      value
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0),
+    [value]
+  );
 
-  // Détection des blocs qui doivent être rendus en display
-  const needsDisplay = (text: string) => {
-    return /\\(sys|align|cases|begin\{.*matrix\})/.test(text);
-  };
+  // Détection des blocs display (systèmes, align, matrices, équations)
+  const needsDisplay = (text: string) =>
+    /(\\begin\{(cases|aligned|array|matrix|bmatrix|pmatrix)\})|\\sys|\\align|\\\[|\\\]|^\$\$|\\bigskip/.test(
+      text
+    );
 
   return (
     <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-lg shadow-sm">
@@ -50,13 +55,13 @@ export default function LatexPreview({
         onChange={(e) => onChange(e.target.value)}
       />
 
-      {/* Aperçu */}
+      {/* Aperçu MathJax */}
       <div
         ref={previewRef}
         className="border border-gray-200 rounded-lg bg-white p-4 mt-2 text-base leading-relaxed select-text"
       >
         {value && value.trim() ? (
-          <MathJaxContext config={mathJaxConfig}>
+          <MathJaxContext key={value} config={mathJaxConfig}>
             {paragraphs.map((p, i) => (
               <p
                 key={i}
