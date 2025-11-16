@@ -1,6 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { freeCourseIds } from "@/utils/freeCourses"; // ✅ importe la liste
 
 interface Course {
   id: string;
@@ -17,8 +20,30 @@ interface Props {
 
 export default function CourseCard({ course, onEnroll }: Props) {
   const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleMainButton = () => {
+    // ✅ Cours libre → accès direct sans login
+    if (freeCourseIds.includes(course.id)) {
+      router.push(`/tuto/${course.id}`);
+      return;
+    }
+
+    // 🔐 Sinon, il faut être connecté
+    if (!isAuthenticated) {
+      router.push("/login");
+      return;
+    }
+
+    // 🧾 Si connecté :
     if (!course.enrolled) {
       onEnroll?.();
     } else {
@@ -29,9 +54,19 @@ export default function CourseCard({ course, onEnroll }: Props) {
   const defaultImgUrl =
     "https://myschool-maroc.com/wp-content/uploads/2023/11/medium-shot-boy-portrait-with-graduation-background-768x748.jpg";
 
-  let buttonLabel = "S'inscrire";
-  let buttonColor = "bg-gray-500 text-white";
-  let badge = (
+  let buttonLabel = freeCourseIds.includes(course.id)
+    ? "Accès libre"
+    : "S'inscrire";
+
+  let buttonColor = freeCourseIds.includes(course.id)
+    ? "bg-green-600 text-white"
+    : "bg-gray-500 text-white";
+
+  let badge = freeCourseIds.includes(course.id) ? (
+    <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700">
+      Libre
+    </span>
+  ) : (
     <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-200 text-gray-600">
       Nouveau
     </span>
@@ -86,7 +121,6 @@ export default function CourseCard({ course, onEnroll }: Props) {
       className={`group p-3 rounded-lg shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-44 h-[240px] ${cardClass}`}
       style={customStyle}
     >
-      {/* Image */}
       <div className="mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-50 border">
         <img
           src={course.img && course.img.trim() !== "" ? course.img : defaultImgUrl}
@@ -96,15 +130,12 @@ export default function CourseCard({ course, onEnroll }: Props) {
         />
       </div>
 
-      {/* Titre */}
       <h3 className="text-xs font-semibold mb-1 text-center line-clamp-2">
         {course.titre}
       </h3>
 
-      {/* Badge */}
       <div className="mb-2">{badge}</div>
 
-      {/* Bouton principal */}
       <button
         onClick={handleMainButton}
         className={`w-full py-1.5 rounded-md text-xs font-semibold transition
@@ -115,7 +146,6 @@ export default function CourseCard({ course, onEnroll }: Props) {
         {buttonLabel}
       </button>
 
-      {/* Lien détail */}
       <Link
         href={`/courses/${course.id}`}
         className="text-xs text-blue-600 hover:underline"

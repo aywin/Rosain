@@ -6,16 +6,7 @@ import ProgressBar from "./ProgressBar";
 import QuizOverlay, { Quiz } from "./QuizOverlay";
 import { logQuizResponse, logVideoProgress } from "@/helpers/activityTracker";
 import { auth } from "@/firebase";
-
-interface VideoPlayerProps {
-  url: string;
-  title: string;
-  courseId: string;
-  videoIdFirestore: string;
-  onAssistantClick: () => void;
-  onNext: () => void;
-  quizzes?: Quiz[];
-}
+import VideoTranscript from "./VideoTranscript";
 
 declare global {
   interface Window {
@@ -24,6 +15,27 @@ declare global {
   }
 }
 
+// Interface pour la transcription
+interface TranscriptSegment {
+  start: number;
+  duration: number;
+  text: string;
+}
+
+// ✅ CORRECTION : Ajout de onTimeUpdate dans l'interface
+interface VideoPlayerProps {
+  url: string;
+  title: string;
+  courseId: string;
+  videoIdFirestore: string;
+  onAssistantClick: () => void;
+  onNext: () => void;
+  quizzes?: Quiz[];
+  transcript?: TranscriptSegment[];
+  onTimeUpdate?: (time: number) => void; // ✅ NOUVEAU
+}
+
+// ✅ CORRECTION : Destructurer onTimeUpdate dans les props
 export default function VideoPlayer({
   url,
   title,
@@ -32,7 +44,10 @@ export default function VideoPlayer({
   onAssistantClick,
   onNext,
   quizzes = [],
+  transcript = [],
+  onTimeUpdate, // ✅ NOUVEAU
 }: VideoPlayerProps) {
+
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
 
@@ -65,7 +80,7 @@ export default function VideoPlayer({
   };
   const videoId = getVideoId(url);
 
-  // 🔹 Reset état à chaque vidéo
+  // Reset état à chaque vidéo
   useEffect(() => {
     setAnsweredQuizzes([]);
     setDisplayedQuizzes([]);
@@ -78,7 +93,7 @@ export default function VideoPlayer({
     setCountdown(null);
   }, [videoId]);
 
-  // 🔹 Init YouTube Player
+  // Init YouTube Player
   useEffect(() => {
     if (!videoId || !containerRef.current) {
       setError("URL de la vidéo invalide.");
@@ -146,54 +161,69 @@ export default function VideoPlayer({
       if (playerRef.current?.destroy) playerRef.current.destroy();
       playerRef.current = null;
       setIsPlayerReady(false);
-      window.onYouTubeIframeAPIReady = () => {};
+      window.onYouTubeIframeAPIReady = () => { };
     };
   }, [videoId]);
 
-  // 🔹 Progress loop & Firestore logging
+  // ✅ CORRECTION : Ajout de l'appel onTimeUpdate dans la boucle
   useEffect(() => {
-    if (!auth.currentUser || !videoIdFirestore || !duration) return;
+    if (!duration) return;
 
     let lastLogged = 0;
 
     const loop = () => {
-      if (playerRef.current && playerRef.current.getCurrentTime) {
+      if (playerRef.current?.getCurrentTime) {
         const t = playerRef.current.getCurrentTime();
         setCurrentTime(t);
 
-        // Log Firestore toutes les 5s
-        if (t - lastLogged >= 5 || t === duration) {
-          lastLogged = t;
-          const minutesWatched = t / 60;
-          const minutesRemaining = duration / 60 - minutesWatched;
-          const completed = t >= duration - 1;
-
-          logVideoProgress({
-            userId: auth.currentUser!.uid,
-            videoId: videoIdFirestore,
-            courseId,
-            minutesWatched,
-            minutesRemaining,
-            lastPosition: t,
-            completed,
-            updatedAt: new Date(),
-          });
+        // ✅ NOUVEAU : Transmettre le temps au parent (TutoPage)
+        if (onTimeUpdate) {
+          onTimeUpdate(t);
         }
 
         checkQuiz(t);
+
+        // Log Firestore uniquement si un utilisateur est connecté
+        const user = auth.currentUser;
+        if (user && videoIdFirestore) {
+          if (t - lastLogged >= 5 || t === duration) {
+            lastLogged = t;
+            const minutesWatched = t / 60;
+            const minutesRemaining = duration / 60 - minutesWatched;
+            const completed = t >= duration - 1;
+
+            logVideoProgress({
+              userId: user.uid,
+              videoId: videoIdFirestore,
+              courseId,
+              minutesWatched,
+              minutesRemaining,
+              lastPosition: t,
+              completed,
+              updatedAt: new Date(),
+            });
+          }
+        }
       }
 
+      // Toujours continuer la boucle, même sans user
       if (isPlaying) rafRef.current = requestAnimationFrame(loop);
     };
 
     if (isPlaying) rafRef.current = requestAnimationFrame(loop);
 
     return () => stopProgressLoop();
-  }, [isPlaying, duration]);
+  }, [
+    isPlaying,
+    duration,
+    videoIdFirestore ?? null,
+    courseId ?? null,
+    onTimeUpdate, // ✅ AJOUT dans les dépendances
+  ]);
 
   const startProgressLoop = () => {
     stopProgressLoop();
-    if (isPlaying) rafRef.current = requestAnimationFrame(() => {});
+    if (isPlaying) rafRef.current = requestAnimationFrame(() => { });
   };
 
   const stopProgressLoop = () => {
@@ -203,7 +233,7 @@ export default function VideoPlayer({
     }
   };
 
-  // 🔹 Gestion quizzes
+  // Gestion quizzes
   const sortedQuizzes = useMemo(() => [...quizzes].sort((a, b) => a.timestamp - b.timestamp), [quizzes]);
 
   const checkQuiz = (current: number) => {
@@ -227,8 +257,8 @@ export default function VideoPlayer({
   };
 
   const handleQuizSubmit = (timestamp: number) => {
+    if (!currentQuiz) return;
     const user = auth.currentUser;
-    if (!currentQuiz || !user) return;
 
     const correctAnswers: Record<number, number> = {};
     currentQuiz.questions.forEach((q, i) => {
@@ -237,25 +267,32 @@ export default function VideoPlayer({
 
     const userAnswers = { ...selectedAnswers };
     const total = currentQuiz.questions.length;
-    const correctCount = currentQuiz.questions.filter((q, i) => userAnswers[i] === correctAnswers[i]).length;
+    const correctCount = currentQuiz.questions.filter(
+      (q, i) => userAnswers[i] === correctAnswers[i]
+    ).length;
     const score = Math.round((correctCount / total) * 100);
 
-    logQuizResponse({
-      quizId: currentQuiz.id,
-      userId: user.uid,
-      videoId: videoIdFirestore,
-      courseId,
-      userAnswers,
-      correctAnswers,
-      isCorrect: score,
-      submittedAt: new Date(),
-    });
+    // Enregistrer seulement si un user est connecté
+    if (user && videoIdFirestore) {
+      logQuizResponse({
+        quizId: currentQuiz.id,
+        userId: user.uid,
+        videoId: videoIdFirestore,
+        courseId,
+        userAnswers,
+        correctAnswers,
+        isCorrect: score,
+        submittedAt: new Date(),
+      });
+    }
 
+    // Toujours enregistrer localement (même pour invités)
     setSavedQuizAnswers(prev => ({ ...prev, [currentQuiz.id]: selectedAnswers }));
     setAnsweredQuizzes(prev => [...prev, currentQuiz.id]);
     setSelectedAnswers({});
     setCurrentQuiz(null);
 
+    // Reprendre la lecture pour tout le monde
     if (playerRef.current) {
       const newTime = Math.min(timestamp, duration);
       playerRef.current.seekTo(newTime, true);
@@ -356,6 +393,13 @@ export default function VideoPlayer({
           >
             Ouvrir Assistant IA →
           </button>
+
+          {/* Affichage de la transcription */}
+          <VideoTranscript
+            transcript={transcript}
+            currentTime={currentTime}
+            onSeek={handleSeek}
+          />
 
           {currentQuiz && (
             <QuizOverlay

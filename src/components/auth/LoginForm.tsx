@@ -15,19 +15,29 @@ export default function LoginForm() {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    try {
-      const userCred = await signInWithEmailAndPassword(auth, form.email, form.password);
-      console.log("✅ Connecté :", userCred.user);
-      router.push("/");
-    } catch (err: any) {
-      console.error("❌ Erreur login :", err.code, err.message);
-      setError("Email ou mot de passe incorrect.");
-    }
-  };
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setMessage("");
+
+  try {
+    const userCred = await signInWithEmailAndPassword(auth, form.email, form.password);
+    console.log("✅ Connecté :", userCred.user);
+    router.push("/");
+  } catch (err: any) {
+    console.error("❌ Erreur login :", err.code, err.message);
+
+    const errorMessages: Record<string, string> = {
+      "auth/invalid-email": "Adresse email invalide.",
+      "auth/user-disabled": "Ce compte a été désactivé.",
+      "auth/user-not-found": "Aucun compte associé à cet email.",
+      "auth/wrong-password": "Mot de passe incorrect.",
+      "auth/invalid-credential": "Email ou mot de passe incorrect.",
+    };
+
+    setError(errorMessages[err.code] || "Une erreur est survenue. Réessayez plus tard.");
+  }
+};
 
   const handleForgotPassword = async () => {
     setError("");

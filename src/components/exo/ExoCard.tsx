@@ -1,9 +1,9 @@
 "use client";
 
-import { MathJax, MathJaxContext } from "better-react-mathjax";
+import { MathJax } from "better-react-mathjax";
 import React, { useRef, useEffect } from "react";
-import { FaBookOpen, FaCheckCircle, FaTag } from "react-icons/fa";
-import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
+import { FaBookOpen, FaCheckCircle, FaTag, FaRobot, FaFileAlt, FaLightbulb } from "react-icons/fa";
+import { preprocessLatex, needsDisplay } from "@/components/admin/utils/latexUtils";
 
 interface Level { id: string; name: string; }
 interface Subject { id: string; name: string; }
@@ -29,43 +29,61 @@ interface ExoCardProps {
   levels: Level[];
   subjects: Subject[];
   courses: Course[];
-  openStatementId: string | null;
-  openSolutionId: string | null;
-  setOpenStatementId: (id: string | null) => void;
-  setOpenSolutionId: (id: string | null) => void;
+  openStatementIds: Set<string>;
+  openSolutionIds: Set<string>;
+  toggleStatement: (id: string) => void;
+  toggleSolution: (id: string) => void;
+  onAssistantClick?: (exoContext: any) => void;
+  isSelectedForAssistant?: boolean;
+  onToggleSelection?: (exoId: string) => void;
 }
 
-// --- Helpers ---
-const needsDisplay = (text: string) => {
-  return /\\(sys|align|cases|begin\{.*matrix\})/.test(text);
-};
-
+/** Rendering texte + LaTeX (sans conversion Markdown) */
 const renderParagraphs = (text?: string) => {
   if (!text) return null;
-  const paragraphs = text
+
+  const processedText = preprocessLatex(text);
+
+  const paragraphs = processedText
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
-  return paragraphs.map((p, i) => (
-    <p
-      key={i}
-      className="mb-3 text-sm leading-snug"
-      style={{
-        marginBottom: p.includes("\\bigskip") ? "1em" : "inherit",
-      }}
-    >
-      <MathJax dynamic>
-        {needsDisplay(p) ? `$$${p}$$` : p}
-      </MathJax>
-    </p>
-  ));
+  return paragraphs.map((p, i) => {
+    const isDisplayBlock = p.startsWith("\\[") || p.startsWith("$$");
+    const isDisplay = isDisplayBlock || needsDisplay(p);
+
+    let content = p;
+    if (isDisplay && !isDisplayBlock && !p.includes("$")) {
+      content = `$${p}$`;
+    }
+
+    return (
+      <div
+        key={i}
+        className={`text-sm leading-relaxed ${isDisplayBlock ? "my-4" : "mb-3"}`}
+        style={{ marginBottom: p.includes("bigskip") ? "1.5em" : undefined }}
+      >
+        <MathJax dynamic hideUntilTypeset="first">
+          {content}
+        </MathJax>
+      </div>
+    );
+  });
 };
 
 export default function ExoCard({
-  exo, levels, subjects, courses,
-  openStatementId, openSolutionId,
-  setOpenStatementId, setOpenSolutionId
+  exo,
+  levels,
+  subjects,
+  courses,
+  openStatementIds,
+  openSolutionIds,
+  toggleStatement,
+  toggleSolution,
+  onAssistantClick,
+  isSelectedForAssistant = false,
+  onToggleSelection,
 }: ExoCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -79,91 +97,202 @@ export default function ExoCard({
   const diffColors: Record<string, string> = {
     facile: "bg-green-100 text-green-700",
     moyen: "bg-yellow-100 text-yellow-700",
-    difficile: "bg-red-100 text-red-700"
+    difficile: "bg-red-100 text-red-700",
   };
 
+  const handleAssistantClick = () => {
+    if (onAssistantClick) {
+      const level = levels.find((l) => l.id === exo.level_id);
+      const subject = subjects.find((s) => s.id === exo.subject_id);
+
+      if (onToggleSelection && !isSelectedForAssistant) {
+        onToggleSelection(exo.id);
+      }
+
+      onAssistantClick({
+        id: exo.id,
+        title: exo.title,
+        statement: exo.statement_text,
+        solution: exo.solution_text,
+        difficulty: exo.difficulty,
+        tags: exo.tags,
+        level: level?.name,
+        subject: subject?.name,
+      });
+    }
+  };
+
+  const statementOpen = openStatementIds.has(exo.id);
+  const solutionOpen = openSolutionIds.has(exo.id);
+
   return (
-    <MathJaxContext config={mathJaxConfig}>
-      <div
-        ref={containerRef}
-        className="border rounded-xl shadow-md hover:shadow-lg transition bg-white flex flex-col overflow-hidden"
-      >
-        {/* Header */}
-        <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-blue-100">
-          <h2 className="font-semibold text-lg">{exo.title}</h2>
-          {exo.description && <p className="text-gray-600 text-sm mt-1">{exo.description}</p>}
-          {exo.difficulty && (
-            <span className={`inline-block text-xs px-2 py-0.5 mt-2 rounded ${diffColors[exo.difficulty] || "bg-gray-200"}`}>
-              {exo.difficulty.charAt(0).toUpperCase() + exo.difficulty.slice(1)}
+    <div
+      ref={containerRef}
+      className={`border rounded-xl shadow-md hover:shadow-lg transition bg-white flex flex-col overflow-hidden relative ${isSelectedForAssistant ? "border-green-500 border-2 ring-2 ring-green-200" : ""
+        }`}
+    >
+      {/* Badge "Actif" */}
+      {isSelectedForAssistant && (
+        <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full shadow-lg z-10 flex items-center gap-1">
+          <FaRobot size={12} />
+          <span>Actif</span>
+        </div>
+      )}
+
+      {/* Checkbox assistant */}
+      {onToggleSelection && (
+        <div className="px-4 pt-3 pb-2 border-b bg-gradient-to-r from-gray-50 to-gray-100">
+          <label className="flex items-center gap-2 cursor-pointer hover:text-green-700 transition">
+            <input
+              type="checkbox"
+              checked={isSelectedForAssistant}
+              onChange={() => onToggleSelection(exo.id)}
+              className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-pointer"
+            />
+            <span className="text-sm font-medium flex items-center gap-1">
+              <FaRobot className="text-green-600" size={14} />
+              Inclure dans l'assistant IA
             </span>
-          )}
+          </label>
         </div>
+      )}
 
-        {/* Infos */}
-        <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2 px-4">
-          {exo.level_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{levels.find(l => l.id === exo.level_id)?.name}</span>}
-          {exo.subject_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{subjects.find(s => s.id === exo.subject_id)?.name}</span>}
-          {exo.course_id && <span className="bg-gray-200 px-2 py-0.5 rounded">{courses.find(c => c.id === exo.course_id)?.title}</span>}
-        </div>
-
-        {/* Tags */}
-        {exo.tags && exo.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 pt-2 pb-2 border-t mt-2">
-            {exo.tags.map((tag, i) => (
-              <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center gap-1">
-                <FaTag className="text-xs" /> {tag}
+      {/* Header */}
+      <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-blue-100">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h2 className="font-semibold text-lg">{exo.title}</h2>
+            {exo.description && <p className="text-gray-600 text-sm mt-1">{exo.description}</p>}
+            {exo.difficulty && (
+              <span
+                className={`inline-block text-xs px-2 py-0.5 mt-2 rounded ${diffColors[exo.difficulty] || "bg-gray-200"
+                  }`}
+              >
+                {exo.difficulty.charAt(0).toUpperCase() + exo.difficulty.slice(1)}
               </span>
-            ))}
+            )}
           </div>
-        )}
 
-        {/* Content */}
-        <div className="p-4 border-t space-y-3">
-          {/* Statement */}
-          {exo.statement_text && (
-            <>
-              <button
-                className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm w-full transition"
-                onClick={() => setOpenStatementId(openStatementId === exo.id ? null : exo.id)}
-              >
-                <FaBookOpen />
-                {openStatementId === exo.id ? "Cacher l’énoncé" : "Voir l’énoncé"}
-              </button>
-              {openStatementId === exo.id && (
-                <div className="p-3 bg-gray-50 rounded-lg text-sm leading-snug mt-2">
-                  <h4 className="font-semibold mb-2 text-center">📘 Énoncé</h4>
-                  {renderParagraphs(exo.statement_text)}
-                  {exo.statement_files?.map((file, i) => (
-                    <a key={i} href={file} target="_blank" className="text-blue-600 underline text-xs block mt-1">📂 Télécharger l’énoncé</a>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Solution */}
-          {exo.solution_text && (
-            <>
-              <button
-                className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm w-full transition"
-                onClick={() => setOpenSolutionId(openSolutionId === exo.id ? null : exo.id)}
-              >
-                <FaCheckCircle />
-                {openSolutionId === exo.id ? "Cacher la solution" : "Voir la solution"}
-              </button>
-              {openSolutionId === exo.id && (
-                <div className="p-3 bg-green-50 rounded-lg text-sm leading-snug mt-2">
-                  <h4 className="font-semibold mb-2 text-center">✅ Solution</h4>
-                  {renderParagraphs(exo.solution_text)}
-                  {exo.solution_files?.map((file, i) => (
-                    <a key={i} href={file} target="_blank" className="text-blue-600 underline text-xs block mt-1">📂 Télécharger la solution</a>
-                  ))}
-                </div>
-              )}
-            </>
+          {onAssistantClick && (
+            <button
+              onClick={handleAssistantClick}
+              className="ml-4 flex items-center gap-2 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition text-sm"
+              title="Ouvrir l'assistant IA"
+            >
+              <FaRobot />
+              <span>Assistant</span>
+            </button>
           )}
         </div>
       </div>
-    </MathJaxContext>
+
+      {/* Infos */}
+      <div className="flex flex-wrap gap-2 text-xs text-gray-600 mt-2 px-4">
+        {exo.level_id && (
+          <span className="bg-gray-200 px-2 py-0.5 rounded">
+            {levels.find((l) => l.id === exo.level_id)?.name}
+          </span>
+        )}
+        {exo.subject_id && (
+          <span className="bg-gray-200 px-2 py-0.5 rounded">
+            {subjects.find((s) => s.id === exo.subject_id)?.name}
+          </span>
+        )}
+        {exo.course_id && (
+          <span className="bg-gray-200 px-2 py-0.5 rounded">
+            {courses.find((c) => c.id === exo.course_id)?.title}
+          </span>
+        )}
+      </div>
+
+      {/* Tags */}
+      {exo.tags && exo.tags.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-4 pt-2 pb-2 border-t mt-2">
+          {exo.tags.map((tag, i) => (
+            <span
+              key={i}
+              className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs flex items-center gap-1"
+            >
+              <FaTag className="text-xs" /> {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="p-4 border-t space-y-3">
+        {/* Statement */}
+        {exo.statement_text && (
+          <>
+            <button
+              className="flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm w-full transition"
+              onClick={() => toggleStatement(exo.id)}
+            >
+              <FaBookOpen />
+              {statementOpen ? "Cacher l'énoncé" : "Voir l'énoncé"}
+            </button>
+
+            {statementOpen && (
+              <div className="p-4 bg-gray-50 rounded-lg mt-2">
+                <h4 className="font-semibold mb-3 text-center text-base flex items-center justify-center gap-2">
+                  <FaFileAlt className="text-blue-600" />
+                  Énoncé
+                </h4>
+                <div className="space-y-2">{renderParagraphs(exo.statement_text)}</div>
+
+                {exo.statement_files?.map((file, i) => (
+                  <a
+                    key={i}
+                    href={file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline text-xs flex items-center gap-1 mt-2"
+                  >
+                    <FaFileAlt size={12} />
+                    Télécharger l'énoncé
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Solution */}
+        {exo.solution_text && (
+          <>
+            <button
+              className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm w-full transition"
+              onClick={() => toggleSolution(exo.id)}
+            >
+              <FaCheckCircle />
+              {solutionOpen ? "Cacher la solution" : "Voir la solution"}
+            </button>
+
+            {solutionOpen && (
+              <div className="p-4 bg-green-50 rounded-lg mt-2">
+                <h4 className="font-semibold mb-3 text-center text-base flex items-center justify-center gap-2">
+                  <FaLightbulb className="text-green-600" />
+                  Solution
+                </h4>
+                <div className="space-y-2">{renderParagraphs(exo.solution_text)}</div>
+
+                {exo.solution_files?.map((file, i) => (
+                  <a
+                    key={i}
+                    href={file}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline text-xs flex items-center gap-1 mt-2"
+                  >
+                    <FaFileAlt size={12} />
+                    Télécharger la solution
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   );
 }

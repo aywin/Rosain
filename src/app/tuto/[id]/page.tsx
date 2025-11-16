@@ -13,13 +13,20 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { mapCourseWithNames } from "@/utils/mapCourse";
+import { freeCourseIds } from "@/utils/freeCourses";
 
 import Sidebar from "@/components/tuto/Sidebar";
 import CourseHeader from "@/components/tuto/CourseHeader";
 import VideoPlayer from "@/components/tuto/VideoPlayer";
-import VideoTranscript from "@/components/tuto/VideoTranscript";
 import AssistantPanel from "@/components/AssistantPanel";
 import ExoPlayer from "@/components/tuto/ExoPlayer";
+
+// ✅ Interface pour les segments de transcription
+interface TranscriptSegment {
+  start: number;
+  duration: number;
+  text: string;
+}
 
 interface Video {
   id: string;
@@ -41,7 +48,8 @@ type ContentItem =
 
 export default function TutoPage() {
   const params = useParams<{ id: string }>();
-  if (!params?.id) return <div className="p-12 text-[#FF6B6B]">ID manquant</div>;
+  if (!params?.id)
+    return <div className="p-12 text-[#FF6B6B]">ID manquant</div>;
   const courseId = params.id;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -54,8 +62,18 @@ export default function TutoPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // Vérifier inscription
+  // ✅ NOUVEAU : États pour les transcriptions et le temps vidéo
+  const [transcripts, setTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+
+  // ✅ Vérification d'accès (inscription OU cours libre)
   useEffect(() => {
+    if (freeCourseIds.includes(courseId)) {
+      setAllowed(true);
+      setLoading(false);
+      return;
+    }
+
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         setAllowed(false);
@@ -97,7 +115,7 @@ export default function TutoPage() {
       });
   }, [courseId]);
 
-  // Charger vidéos + exos
+  // ✅ Charger vidéos + exos + transcriptions
   useEffect(() => {
     const loadContent = async () => {
       try {
@@ -110,6 +128,8 @@ export default function TutoPage() {
         const vids: Video[] = await Promise.all(
           videoSnap.docs.map(async (docSnap) => {
             const data = docSnap.data();
+            
+            // Charger les quizzes
             const quizQuery = query(
               collection(db, "quizzes"),
               where("videoId", "==", docSnap.id)
@@ -120,6 +140,20 @@ export default function TutoPage() {
               ...q.data(),
             }));
 
+            // ✅ NOUVEAU : Charger la transcription
+            try {
+              const transcriptDoc = await getDoc(doc(db, "transcripts", docSnap.id));
+              if (transcriptDoc.exists()) {
+                const transcriptData = transcriptDoc.data();
+                setTranscripts(prev => ({
+                  ...prev,
+                  [docSnap.id]: transcriptData.transcript || []
+                }));
+              }
+            } catch (error) {
+              console.warn(`Transcription non disponible pour ${docSnap.id}:`, error);
+            }
+
             return {
               id: docSnap.id,
               title: data.title,
@@ -129,6 +163,7 @@ export default function TutoPage() {
             } as Video;
           })
         );
+        
         vids.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
 
@@ -162,7 +197,7 @@ export default function TutoPage() {
     loadContent();
   }, [courseId]);
 
-  // progression
+  // Progression
   const updateProgress = async (
     userId: string,
     courseId: string,
@@ -189,21 +224,30 @@ export default function TutoPage() {
     );
   };
 
+  // Écrans d'attente / erreurs
   if (loading)
     return (
-      <div className="p-12 text-[#1B9AAA] font-semibold text-lg">Chargement…</div>
+      <div className="p-12 text-[#1B9AAA] font-semibold text-lg">
+        Chargement…
+      </div>
     );
   if (!allowed)
     return (
-      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">Accès refusé</div>
+      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">
+        Accès refusé
+      </div>
     );
   if (!course)
     return (
-      <div className="p-12 text-[#FF9F43] font-semibold text-lg">Cours introuvable</div>
+      <div className="p-12 text-[#FF9F43] font-semibold text-lg">
+        Cours introuvable
+      </div>
     );
   if (content.length === 0)
     return (
-      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">Aucun contenu</div>
+      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">
+        Aucun contenu
+      </div>
     );
 
   const currentItem = current !== null ? content[current] : null;
@@ -217,7 +261,11 @@ export default function TutoPage() {
         } fixed top-0 left-0 z-30 h-full w-64 bg-[#f7f7f7] shadow-lg lg:static lg:block`}
       >
         <Sidebar
-          content={content.map(({ id, title, type }) => ({ id, title, type }))}
+          content={content.map(({ id, title, type }) => ({
+            id,
+            title,
+            type,
+          }))}
           current={current}
           setCurrent={(i) => {
             setCurrent(i);
@@ -277,8 +325,10 @@ export default function TutoPage() {
                     }
                   }}
                   quizzes={(currentItem as Video).quizzes}
+                  transcript={transcripts[currentItem.id] || []} // ✅ NOUVEAU
+                  onTimeUpdate={setVideoCurrentTime} // ✅ NOUVEAU
                 />
-                <VideoTranscript />
+                {/* ✅ VideoTranscript est maintenant intégré dans VideoPlayer */}
               </>
             ) : (
               <ExoPlayer
@@ -307,10 +357,30 @@ export default function TutoPage() {
         </div>
       </div>
 
-      {/* Assistant */}
+      {/* ✅ Assistant avec contexte complet */}
       {showAssistant && (
         <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full z-40 shadow-lg">
-          <AssistantPanel onClose={() => setShowAssistant(false)} />
+          <AssistantPanel 
+            onClose={() => setShowAssistant(false)}
+            courseContext={
+              currentItem && course
+                ? {
+                    courseTitle: course.titre,
+                    courseLevel: course.niveau,
+                    currentVideoTitle: currentItem.title,
+                    currentVideoUrl: 
+                      currentItem.type === "video" 
+                        ? (currentItem as Video).url 
+                        : "",
+                    currentTime: videoCurrentTime, // ✅ NOUVEAU
+                    transcript: 
+                      currentItem.type === "video"
+                        ? transcripts[currentItem.id] || []
+                        : [], // ✅ NOUVEAU
+                  }
+                : undefined
+            }
+          />
         </div>
       )}
     </div>

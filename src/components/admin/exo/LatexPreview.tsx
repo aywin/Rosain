@@ -1,14 +1,31 @@
 "use client";
 
-import { MathJax, MathJaxContext } from "better-react-mathjax";
+import { MathJax } from "better-react-mathjax";
 import React, { useRef, useEffect, useMemo } from "react";
-import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
+import { preprocessLatex } from "@/components/admin/utils/latexUtils";
 
 type Props = {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+};
+
+/**
+ * Convertit le Markdown en HTML
+ * Gère **texte** → <strong>texte</strong>
+ * Gère *texte* → <em>texte</em>
+ */
+const convertMarkdownToHtml = (text: string): string => {
+  let html = text;
+
+  // Convertir **texte** en <strong>texte</strong>
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Convertir *texte* en <em>texte</em> (attention aux ** déjà traités)
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  return html;
 };
 
 export default function LatexPreview({
@@ -19,29 +36,21 @@ export default function LatexPreview({
 }: Props) {
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Rendre le contenu sélectionnable
   useEffect(() => {
     if (previewRef.current) {
       previewRef.current.style.userSelect = "text";
-      (previewRef.current.style as any).webkitUserSelect = "text";
+      previewRef.current.style.webkitUserSelect = "text";
     }
   }, [value]);
 
-  // Découper en paragraphes par double saut de ligne
-  const paragraphs = useMemo(
-    () =>
-      value
-        .split(/\n{2,}/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 0),
-    [value]
-  );
-
-  // Détection des blocs display (systèmes, align, matrices, équations)
-  const needsDisplay = (text: string) =>
-    /(\\begin\{(cases|aligned|array|matrix|bmatrix|pmatrix)\})|\\sys|\\align|\\\[|\\\]|^\$\$|\\bigskip/.test(
-      text
-    );
+  const paragraphs = useMemo(() => {
+    if (!value) return [];
+    const processed = preprocessLatex(value);
+    return processed
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+  }, [value]);
 
   return (
     <div className="flex flex-col gap-2 p-4 bg-gray-50 rounded-lg shadow-sm">
@@ -49,33 +58,31 @@ export default function LatexPreview({
 
       {/* Zone de saisie */}
       <textarea
-        className="border border-gray-300 px-4 py-3 rounded-lg w-full text-base leading-relaxed min-h-[300px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="border border-gray-300 px-4 py-3 rounded-lg w-full text-base leading-relaxed min-h-[300px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        spellCheck={false}
       />
 
       {/* Aperçu MathJax */}
       <div
         ref={previewRef}
-        className="border border-gray-200 rounded-lg bg-white p-4 mt-2 text-base leading-relaxed select-text"
+        className="border border-gray-200 rounded-lg bg-white p-4 mt-2 text-base leading-relaxed select-text min-h-[100px] markdown-content"
       >
         {value && value.trim() ? (
-          <MathJaxContext key={value} config={mathJaxConfig}>
-            {paragraphs.map((p, i) => (
-              <p
+          paragraphs.map((p, i) => {
+            return (
+              <div
                 key={i}
-                className="mb-4"
-                style={{
-                  marginBottom: p.includes("\\bigskip") ? "1em" : "inherit",
-                }}
+                className="mb-4 last:mb-0"
               >
-                <MathJax dynamic>
-                  {needsDisplay(p) ? `$$${p}$$` : p}
+                <MathJax dynamic hideUntilTypeset="first">
+                  {p}
                 </MathJax>
-              </p>
-            ))}
-          </MathJaxContext>
+              </div>
+            );
+          })
         ) : (
           <span className="text-gray-500 italic">
             Entrez du code LaTeX pour un aperçu...

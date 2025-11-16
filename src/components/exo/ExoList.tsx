@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { db } from "@/firebase";
+import { db, auth } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoFilters from "./ExoFilters";
 import ExoCard from "./ExoCard";
-import { FaSpinner } from "react-icons/fa";
+import ExoAssistantPanel from "./ExoAssistantPanel";
+import { FaSpinner, FaRobot } from "react-icons/fa";
 
 interface Level {
   id: string;
@@ -51,8 +52,29 @@ export default function ExoList() {
   const [courseId, setCourseId] = useState("");
 
   // Ouvertures
-  const [openStatementId, setOpenStatementId] = useState<string | null>(null);
-  const [openSolutionId, setOpenSolutionId] = useState<string | null>(null);
+  const [openStatementIds, setOpenStatementIds] = useState<Set<string>>(new Set());
+  const [openSolutionIds, setOpenSolutionIds] = useState<Set<string>>(new Set());
+
+  const toggleStatement = (exoId: string) => {
+    setOpenStatementIds(prev => {
+      const copy = new Set(prev);
+      copy.has(exoId) ? copy.delete(exoId) : copy.add(exoId);
+      return copy;
+    });
+  };
+
+  const toggleSolution = (exoId: string) => {
+    setOpenSolutionIds(prev => {
+      const copy = new Set(prev);
+      copy.has(exoId) ? copy.delete(exoId) : copy.add(exoId);
+      return copy;
+    });
+  };
+
+  // Gestion de la sélection pour l'assistant
+  const [showAssistant, setShowAssistant] = useState(false);
+  const [currentExoContext, setCurrentExoContext] = useState<any>(null);
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,7 +97,7 @@ export default function ExoList() {
       setCourses(sortedCourses);
       setExos(exosData);
 
-      // ✅ Initialiser les filtres par défaut : Terminal + Maths + cours order=1
+      // Initialiser les filtres par défaut : Terminal + Maths + cours order=1
       const terminalLevel = levelsData.find((l) => l.name === "Terminal");
       const mathsSubject = subjectsData.find((s) => s.name === "Maths");
 
@@ -96,21 +118,74 @@ export default function ExoList() {
     fetchData();
   }, []);
 
-  if (loading)
-    return (
-      <div className="flex justify-center items-center h-64">
-        <FaSpinner className="animate-spin text-blue-500 text-3xl" />
-        <span className="ml-2 text-gray-700">Chargement des exercices...</span>
-      </div>
-    );
+  const toggleExerciseSelection = (exoId: string) => {
+    setSelectedExerciseIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(exoId)) {
+        newSet.delete(exoId);
+      } else {
+        newSet.add(exoId);
+      }
+      return newSet;
+    });
+  };
 
-  // 🔹 Filtrage dynamique des cours selon filtres
+  const handleAssistantClick = (exoContext: any) => {
+    setCurrentExoContext(exoContext);
+    setShowAssistant(true);
+
+    // Auto-sélectionner cet exercice s'il ne l'est pas déjà
+    setSelectedExerciseIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(exoContext.id);
+      return newSet;
+    });
+  };
+
+  const selectedExercises = exos
+    .filter(exo => selectedExerciseIds.has(exo.id))
+    .map(exo => {
+      const level = levels.find(l => l.id === exo.level_id);
+      const subject = subjects.find(s => s.id === exo.subject_id);
+      return {
+        id: exo.id,
+        title: exo.title,
+        statement: exo.statement_text,
+        solution: exo.solution_text,
+        difficulty: exo.difficulty,
+        tags: exo.tags,
+        level: level?.name,
+        subject: subject?.name,
+        order: exo.order
+      };
+    });
+
+  const openGeneralAssistant = () => {
+    setCurrentExoContext(null);
+    setShowAssistant(true);
+  };
+
   const filteredCourses = courses.filter(
     (c) => (!levelId || c.level_id === levelId) && (!subjectId || c.subject_id === subjectId)
   );
 
+  const currentLevel = levels.find(l => l.id === levelId);
+  const currentSubject = subjects.find(s => s.id === subjectId);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <FaSpinner className="animate-spin text-blue-500 text-4xl mx-auto mb-4" />
+          <p className="text-gray-600 text-lg">Chargement des exercices...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      {/* Filtres en position sticky */}
       <ExoFilters
         levels={levels}
         subjects={subjects}
@@ -123,40 +198,78 @@ export default function ExoList() {
         setCourseId={setCourseId}
       />
 
-      {filteredCourses.length === 0 && (
-        <p className="text-center text-gray-500 mt-6">Aucun exercice trouvé.</p>
+      {/* Bouton flottant Assistant IA */}
+      {!showAssistant && (
+        <button
+          onClick={openGeneralAssistant}
+          className="fixed bottom-8 right-8 bg-green-600 hover:bg-green-700 text-white rounded-full p-4 shadow-2xl transition-all duration-300 hover:scale-110 z-40 flex items-center gap-3"
+          title="Ouvrir l'assistant IA"
+        >
+          <FaRobot className="text-2xl" />
+          <span className="font-semibold">Assistant IA</span>
+          {selectedExerciseIds.size > 0 && (
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-7 h-7 rounded-full flex items-center justify-center font-bold shadow-lg">
+              {selectedExerciseIds.size}
+            </span>
+          )}
+        </button>
       )}
 
-      <div className="flex flex-col gap-10 mt-6">
-        {filteredCourses.map((course) => {
-          const courseExos = exos
-            .filter((e) => e.course_id === course.id && (!courseId || e.course_id === courseId))
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      {/* Contenu principal */}
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {filteredCourses.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-gray-500 text-lg">Aucun cours trouvé pour cette sélection.</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {filteredCourses.map((course) => {
+              const courseExos = exos
+                .filter((e) => e.course_id === course.id && (!courseId || e.course_id === courseId))
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-          if (courseExos.length === 0) return null;
+              if (courseExos.length === 0) return null;
 
-          return (
-            <div key={course.id}>
-              <div className="flex flex-col items-center gap-6">
-                {courseExos.map((exo) => (
-                  <div key={exo.id} className="w-full max-w-2xl">
+              return (
+                <div key={course.id} className="space-y-6">
+                  {courseExos.map((exo) => (
                     <ExoCard
+                      key={exo.id}
                       exo={exo}
                       levels={levels}
                       subjects={subjects}
                       courses={courses}
-                      openStatementId={openStatementId}
-                      openSolutionId={openSolutionId}
-                      setOpenStatementId={setOpenStatementId}
-                      setOpenSolutionId={setOpenSolutionId}
+                      openStatementIds={openStatementIds}
+                      openSolutionIds={openSolutionIds}
+                      toggleStatement={toggleStatement}
+                      toggleSolution={toggleSolution}
+                      onAssistantClick={handleAssistantClick}
+                      isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
+                      onToggleSelection={toggleExerciseSelection}
                     />
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Panel Assistant IA */}
+      {showAssistant && (
+        <div className="fixed right-0 top-0 w-[450px] max-w-full h-full bg-white shadow-2xl z-50 border-l">
+          <ExoAssistantPanel
+            onClose={() => {
+              setShowAssistant(false);
+              setCurrentExoContext(null);
+            }}
+            exoContext={currentExoContext}
+            userLevel={currentLevel?.name}
+            userSubject={currentSubject?.name}
+            activeExercises={selectedExercises}
+          />
+        </div>
+      )}
     </div>
   );
 }
