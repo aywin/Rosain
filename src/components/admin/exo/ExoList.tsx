@@ -282,7 +282,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Courses
+            Cours
           </label>
           <select
             value={selectedCourse}
