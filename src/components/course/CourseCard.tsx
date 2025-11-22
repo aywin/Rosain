@@ -3,7 +3,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { useEffect, useState } from "react";
-import { freeCourseIds } from "@/utils/freeCourses"; // ✅ importe la liste
+import { freeCourseIds } from "@/utils/freeCourses";
+import {
+  FaPlay,
+  FaCheckCircle,
+  FaClock,
+  FaLock,
+  FaUnlock,
+  FaArrowRight
+} from "react-icons/fa";
 
 interface Course {
   id: string;
@@ -31,19 +39,16 @@ export default function CourseCard({ course, onEnroll }: Props) {
   }, []);
 
   const handleMainButton = () => {
-    // ✅ Cours libre → accès direct sans login
     if (freeCourseIds.includes(course.id)) {
       router.push(`/tuto/${course.id}`);
       return;
     }
 
-    // 🔐 Sinon, il faut être connecté
     if (!isAuthenticated) {
       router.push("/login");
       return;
     }
 
-    // 🧾 Si connecté :
     if (!course.enrolled) {
       onEnroll?.();
     } else {
@@ -54,104 +59,130 @@ export default function CourseCard({ course, onEnroll }: Props) {
   const defaultImgUrl =
     "https://myschool-maroc.com/wp-content/uploads/2023/11/medium-shot-boy-portrait-with-graduation-background-768x748.jpg";
 
-  let buttonLabel = freeCourseIds.includes(course.id)
-    ? "Accès libre"
-    : "S'inscrire";
+  const isFree = freeCourseIds.includes(course.id);
 
-  let buttonColor = freeCourseIds.includes(course.id)
-    ? "bg-green-600 text-white"
-    : "bg-gray-500 text-white";
+  // Couleurs du logo : vert foncé #2C5F4D
+  const colors = {
+    green: "#2C5F4D",
+    greenLight: "#E8F5E9",
+    greenText: "#1e4d3c",
+    navy: "#00205B",
+    navyLight: "#E3F2FD",
+    gray: "#546E7A",
+    grayLight: "#F5F5F5",
+  };
 
-  let badge = freeCourseIds.includes(course.id) ? (
-    <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700">
-      Libre
-    </span>
-  ) : (
-    <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-200 text-gray-600">
-      Nouveau
-    </span>
-  );
-
-  let cardClass = "bg-white border border-gray-200 text-gray-800";
-  let customStyle: React.CSSProperties = {};
+  // Configuration selon le statut
+  let config = {
+    buttonLabel: isFree ? "Accès libre" : "S'inscrire",
+    buttonIcon: isFree ? <FaUnlock /> : <FaLock />,
+    buttonBg: isFree ? colors.green : colors.navy,
+    buttonHover: isFree ? "#1e4d3c" : "#001A4D",
+    badge: isFree
+      ? { text: "Gratuit", bg: colors.greenLight, color: colors.greenText, icon: <FaUnlock /> }
+      : { text: "Premium", bg: colors.navyLight, color: colors.navy, icon: <FaLock /> },
+    cardBg: "bg-white",
+    cardBorder: "border-gray-200"
+  };
 
   if (course.enrolled) {
     switch (course.progressStatus) {
       case "not_started":
-        buttonLabel = "Commencer";
-        buttonColor = "bg-white text-pink-800";
-        badge = (
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-pink-800">
-            Non commencé
-          </span>
-        );
-        cardClass = "bg-pink-800 border border-pink-900 text-white";
+        config = {
+          buttonLabel: "Commencer",
+          buttonIcon: <FaPlay />,
+          buttonBg: colors.navy,
+          buttonHover: "#001A4D",
+          badge: { text: "Non commencé", bg: "#FFF3E0", color: "#E65100", icon: <FaClock /> },
+          cardBg: "bg-orange-50",
+          cardBorder: "border-orange-200"
+        };
         break;
 
       case "in_progress":
-        buttonLabel = "Continuer";
-        buttonColor = "bg-white text-[#00205B]";
-        badge = (
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-[#00205B]">
-            En cours
-          </span>
-        );
-        customStyle = {
-          backgroundColor: "#00205B",
-          borderColor: "#001A4D",
-          color: "white",
+        config = {
+          buttonLabel: "Continuer",
+          buttonIcon: <FaPlay />,
+          buttonBg: colors.navy,
+          buttonHover: "#001A4D",
+          badge: { text: "En cours", bg: colors.navyLight, color: colors.navy, icon: <FaClock /> },
+          cardBg: "bg-blue-50",
+          cardBorder: "border-blue-200"
         };
         break;
 
       case "done":
-        buttonLabel = "Revoir";
-        buttonColor = "bg-white text-green-800";
-        badge = (
-          <span className="px-1.5 py-0.5 text-[10px] rounded bg-white text-green-800">
-            Terminé
-          </span>
-        );
-        cardClass = "bg-green-800 border border-green-900 text-white";
+        config = {
+          buttonLabel: "Revoir",
+          buttonIcon: <FaCheckCircle />,
+          buttonBg: colors.green,
+          buttonHover: "#1e4d3c",
+          badge: { text: "Terminé", bg: colors.greenLight, color: colors.greenText, icon: <FaCheckCircle /> },
+          cardBg: "bg-green-50",
+          cardBorder: "border-green-200"
+        };
         break;
     }
   }
 
   return (
-    <div
-      className={`group p-3 rounded-lg shadow-sm hover:shadow-md transition duration-300 flex flex-col items-center w-44 h-[240px] ${cardClass}`}
-      style={customStyle}
-    >
-      <div className="mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-50 border">
-        <img
-          src={course.img && course.img.trim() !== "" ? course.img : defaultImgUrl}
-          alt={course.titre}
-          className="object-cover object-center w-full h-full"
-          loading="lazy"
-        />
+    <div className={`group ${config.cardBg} border-2 ${config.cardBorder} rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}>
+      <div className="relative p-4 md:p-5 flex flex-col h-full">
+        {/* Badge statut */}
+        <div className="absolute top-3 right-3 z-10">
+          <span
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full shadow-sm"
+            style={{ backgroundColor: config.badge.bg, color: config.badge.color }}
+          >
+            {config.badge.icon}
+            {config.badge.text}
+          </span>
+        </div>
+
+        {/* Image */}
+        <div className="relative mb-4">
+          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm group-hover:shadow-md transition-shadow duration-300">
+            <img
+              src={course.img && course.img.trim() !== "" ? course.img : defaultImgUrl}
+              alt={course.titre}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        </div>
+
+        {/* Titre */}
+        <h3 className="text-base md:text-lg font-bold text-gray-800 mb-3 line-clamp-2 min-h-[3rem]">
+          {course.titre}
+        </h3>
+
+        {/* Actions */}
+        <div className="mt-auto space-y-2">
+          {/* Bouton principal */}
+          <button
+            onClick={handleMainButton}
+            className="w-full text-white py-3 px-4 rounded-lg font-semibold text-sm md:text-base flex items-center justify-center gap-2 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200"
+            style={{
+              backgroundColor: config.buttonBg,
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = config.buttonHover}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = config.buttonBg}
+          >
+            {config.buttonIcon}
+            <span>{config.buttonLabel}</span>
+            <FaArrowRight className="ml-auto" />
+          </button>
+
+          {/* Lien détails */}
+          <Link
+            href={`/courses/${course.id}`}
+            className="block w-full text-center text-sm font-medium hover:underline transition-colors py-1"
+            style={{ color: colors.navy }}
+          >
+            Voir les détails
+          </Link>
+        </div>
       </div>
-
-      <h3 className="text-xs font-semibold mb-1 text-center line-clamp-2">
-        {course.titre}
-      </h3>
-
-      <div className="mb-2">{badge}</div>
-
-      <button
-        onClick={handleMainButton}
-        className={`w-full py-1.5 rounded-md text-xs font-semibold transition
-          ${buttonColor} 
-          shadow hover:shadow-md active:scale-95 cursor-pointer
-          hover:brightness-90 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 mb-1`}
-      >
-        {buttonLabel}
-      </button>
-
-      <Link
-        href={`/courses/${course.id}`}
-        className="text-xs text-blue-600 hover:underline"
-      >
-        Détail
-      </Link>
     </div>
   );
 }

@@ -22,6 +22,7 @@ interface Exo {
   statement_files?: string[];
   solution_files?: string[];
   tags?: string[];
+  order?: number;
 }
 
 interface ExoCardProps {
@@ -161,7 +162,9 @@ export default function ExoCard({
       <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-blue-100">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="font-semibold text-lg">{exo.title}</h2>
+            <h2 className="font-semibold text-lg">
+              {exo.order ? `Exercice ${exo.order} : ` : ""}{exo.title}
+            </h2>
             {exo.description && <p className="text-gray-600 text-sm mt-1">{exo.description}</p>}
             {exo.difficulty && (
               <span

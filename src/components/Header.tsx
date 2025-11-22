@@ -3,7 +3,22 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { User, Menu, X, Home, BookOpen, FileEdit, ClipboardList, Info, Settings } from "lucide-react";
+import {
+  User,
+  Menu,
+  X,
+  Home,
+  BookOpen,
+  FileEdit,
+  ClipboardList,
+  Info,
+  Settings,
+  LogOut,
+  UserCircle,
+  ChevronDown,
+  TrendingUp,
+  Library
+} from "lucide-react";
 import { auth, db } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -14,17 +29,14 @@ export default function Header() {
   const [role, setRole] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [mobileDropdown, setMobileDropdown] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const colors = {
-    darkBlue: "#25364C",
-    white: "#FFFFFF",
-    primaryBlue: "#1F77B0",
-    primaryGreen: "#65B04E",
-    lightGray: "#F9FAFB",
-    hoverBlue: "#155E8B",
-    lightHover: "#E5F0FA",
+    green: "#2C5F4D",
+    navy: "#00205B",
   };
 
   useEffect(() => {
@@ -60,7 +72,10 @@ export default function Header() {
   }, [userMenuOpen]);
 
   const toggleMobileMenu = () => setMobileOpen((prev) => !prev);
-  const closeMobileMenu = () => setMobileOpen(false);
+  const closeMobileMenu = () => {
+    setMobileOpen(false);
+    setMobileDropdown(null);
+  };
   const toggleUserMenu = () => setUserMenuOpen((prev) => !prev);
 
   const logout = async () => {
@@ -70,164 +85,275 @@ export default function Header() {
     router.push("/login");
   };
 
+  const menuItems = [
+    {
+      id: "explorer",
+      label: "Explorer",
+      icon: <Library size={18} />,
+      items: [
+        { label: "Tous les cours", href: "/courses", icon: <BookOpen size={16} /> },
+        { label: "Exercices", href: "/exercices", icon: <FileEdit size={16} /> },
+      ]
+    },
+    ...(user ? [{
+      id: "mon-travail",
+      label: "Mon travail",
+      icon: <ClipboardList size={18} />,
+      items: [
+        { label: "Mes cours", href: "/mycourses", icon: <BookOpen size={16} /> },
+        { label: "Ma progression", href: "/mark", icon: <TrendingUp size={16} /> },
+      ]
+    }] : []),
+  ];
+
   return (
-    <header className="shadow-md relative z-50 bg-white text-[#25364C]">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        {/* Logo */}
-        <Link href="/" className="flex items-center space-x-2">
-          <Image src="/logo.jpg" alt="Logo Rosaine Academy" width={40} height={40} className="rounded-full" />
-          <span className="text-2xl font-bold text-[#25364C] hover:opacity-80">Rosaine Academy</span>
-        </Link>
-
-        {/* Navigation desktop */}
-        <nav className="hidden md:flex space-x-6 font-medium items-center">
-          <Link href="/" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-            <Home size={16} /> Accueil
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 flex-shrink-0">
+            <Image
+              src="/logo.jpg"
+              alt="Logo"
+              width={40}
+              height={40}
+              className="rounded-full"
+            />
           </Link>
 
-          {user && (
-            <>
-              <Link href="/courses" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-                <BookOpen size={16} /> Cours
-              </Link>
-              <Link href="/mycourses" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-                <ClipboardList size={16} /> Mes Cours
-              </Link>
-              <Link href="/exercices" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-                <FileEdit size={16} /> Exercices
-              </Link>
-                  <Link href="/mark" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-        <ClipboardList size={16} /> Ma progression
-      </Link>
-            </>
-          )}
-
-          <Link href="/about" className="flex items-center gap-1 text-[#25364C] hover:text-[#1F77B0]">
-            <Info size={16} /> À propos
-          </Link>
-
-          {role === "superadmin" && (
+          {/* Navigation Desktop */}
+          <nav className="hidden lg:flex items-center gap-1">
             <Link
-              href="/admin"
-              className="flex items-center gap-1 px-3 py-1 rounded bg-[#25364C] text-white hover:bg-[#334155] transition"
+              href="/"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
             >
-              <Settings size={16} /> Administration
+              <Home size={18} />
+              <span className="font-medium">Accueil</span>
             </Link>
-          )}
-        </nav>
 
-        {/* Menu utilisateur desktop */}
-        <div className="hidden md:flex items-center space-x-4 relative">
-          {user ? (
-            <>
-              <button
-                onClick={toggleUserMenu}
-                className="flex items-center space-x-2 px-3 py-1 rounded bg-[#F9FAFB] text-[#25364C] hover:bg-[#65B04E] hover:text-white transition"
+            {menuItems.map((menu) => (
+              <div
+                key={menu.id}
+                className="relative"
+                onMouseEnter={() => setOpenDropdown(menu.id)}
+                onMouseLeave={() => setOpenDropdown(null)}
               >
-                <User size={18} />
-                <span>{user.prenom} {user.nom}</span>
-              </button>
-              {userMenuOpen && (
-                <div ref={userMenuRef} className="absolute right-0 top-12 bg-white text-gray-800 shadow-md rounded w-48 z-50">
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-[#E5F0FA] hover:text-[#65B04E]"
-                    onClick={() => {
-                      router.push("/profile");
-                      setUserMenuOpen(false);
-                    }}
-                  >
-                    Mon profil
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-[#E5F0FA] hover:text-[#65B04E]"
-                    onClick={logout}
-                  >
-                    Se déconnecter
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className="px-3 py-1 rounded bg-[#1F77B0] text-white hover:bg-[#155E8B] transition"
-            >
-              Connexion
-            </Link>
-          )}
-        </div>
+                <button
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  {menu.icon}
+                  <span className="font-medium">{menu.label}</span>
+                  <ChevronDown size={16} className={`transition-transform ${openDropdown === menu.id ? 'rotate-180' : ''}`} />
+                </button>
 
-        {/* Mobile menu toggle */}
-        <button
-          onClick={toggleMobileMenu}
-          className="md:hidden p-2 rounded text-[#1F77B0] hover:bg-[#E5F0FA]"
-          aria-label="Menu mobile"
-        >
-          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+                {openDropdown === menu.id && (
+                  <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 w-56 py-2">
+                    {menu.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <Link
+              href="/about"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            >
+              <Info size={18} />
+              <span className="font-medium">À propos</span>
+            </Link>
+          </nav>
+
+          {/* Actions Desktop */}
+          <div className="hidden lg:flex items-center gap-3">
+            {role === "superadmin" && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors shadow-sm"
+                style={{ backgroundColor: colors.navy }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = "0.9"}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+              >
+                <Settings size={18} />
+                <span className="font-medium">Admin</span>
+              </Link>
+            )}
+
+            {user ? (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={toggleUserMenu}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-900 transition-colors"
+                >
+                  <User size={18} />
+                  <span className="font-medium">{user.prenom}</span>
+                  <ChevronDown size={16} className={`transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-14 bg-white rounded-lg shadow-lg border border-gray-200 w-56 py-2">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="font-semibold text-gray-900">{user.prenom} {user.nom}</p>
+                      <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        router.push("/profile");
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <UserCircle size={18} />
+                      <span>Mon profil</span>
+                    </button>
+
+                    <button
+                      onClick={logout}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={18} />
+                      <span>Se déconnecter</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="px-6 py-2 rounded-lg text-white font-medium transition-colors shadow-sm"
+                style={{ backgroundColor: colors.green }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#1e4d3c"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.green}
+              >
+                Connexion
+              </Link>
+            )}
+          </div>
+
+          {/* Bouton Menu Mobile */}
+          <button
+            onClick={toggleMobileMenu}
+            className="lg:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+            aria-label="Menu"
+          >
+            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Menu Mobile */}
       {mobileOpen && (
-        <div className="md:hidden px-4 py-4 space-y-4 bg-[#F9FAFB] text-[#25364C]">
-          <Link href="/" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-            Accueil
-          </Link>
-          {user && (
-            <>
-              <Link href="/courses" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-                Cours
-              </Link>
-              <Link href="/mycourses" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-                Mes Cours
-              </Link>
-              <Link href="/exercices" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-                Exercices
-              </Link>
-              <Link href="/mark" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-                Ma progression
-              </Link>
+        <div className="lg:hidden border-t border-gray-200 bg-white">
+          <div className="px-4 py-4 space-y-1">
+            {user && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="font-semibold text-gray-900">{user.prenom} {user.nom}</p>
+                <p className="text-sm text-gray-500 truncate">{user.email}</p>
+              </div>
+            )}
 
-            </>
-          )}
-          <Link href="/about" onClick={closeMobileMenu} className="block hover:text-[#1F77B0]">
-            À propos
-          </Link>
-
-          {role === "superadmin" && (
             <Link
-              href="/admin"
+              href="/"
               onClick={closeMobileMenu}
-              className="block px-3 py-2 rounded bg-[#25364C] text-white hover:bg-[#334155] transition"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
             >
-              Administration
+              <Home size={20} />
+              <span className="font-medium">Accueil</span>
             </Link>
-          )}
 
-          {user ? (
-            <>
-              <button
-                onClick={() => { router.push("/profile"); closeMobileMenu(); }}
-                className="w-full text-left hover:text-[#65B04E]"
-              >
-                Mon profil
-              </button>
-              <button
-                onClick={() => { logout(); closeMobileMenu(); }}
-                className="w-full text-left hover:text-[#65B04E]"
-              >
-                Se déconnecter
-              </button>
-            </>
-          ) : (
+            {menuItems.map((menu) => (
+              <div key={menu.id}>
+                <button
+                  onClick={() => setMobileDropdown(mobileDropdown === menu.id ? null : menu.id)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {menu.icon}
+                    <span className="font-medium">{menu.label}</span>
+                  </div>
+                  <ChevronDown
+                    size={20}
+                    className={`transition-transform ${mobileDropdown === menu.id ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {mobileDropdown === menu.id && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {menu.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeMobileMenu}
+                        className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
             <Link
-              href="/login"
+              href="/about"
               onClick={closeMobileMenu}
-              className="block px-3 py-1 rounded bg-[#1F77B0] text-white hover:bg-[#155E8B] transition text-center"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
             >
-              Connexion
+              <Info size={20} />
+              <span className="font-medium">À propos</span>
             </Link>
-          )}
+
+            {role === "superadmin" && (
+              <Link
+                href="/admin"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-colors mt-2"
+                style={{ backgroundColor: colors.navy }}
+              >
+                <Settings size={20} />
+                <span className="font-medium">Administration</span>
+              </Link>
+            )}
+
+            {user ? (
+              <div className="pt-4 border-t border-gray-200 space-y-1 mt-4">
+                <button
+                  onClick={() => { router.push("/profile"); closeMobileMenu(); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <UserCircle size={20} />
+                  <span className="font-medium">Mon profil</span>
+                </button>
+
+                <button
+                  onClick={() => { logout(); closeMobileMenu(); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut size={20} />
+                  <span className="font-medium">Se déconnecter</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                onClick={closeMobileMenu}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-white font-medium transition-colors mt-4"
+                style={{ backgroundColor: colors.green }}
+              >
+                Connexion
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>
