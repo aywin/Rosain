@@ -24,7 +24,7 @@ interface Exo {
   solution_text: string;
   order: number;
   tags: string[];
-  difficulty?: string;
+  difficulty?: "facile" | "moyen" | "difficile";
 }
 
 interface Course {
@@ -55,10 +55,8 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("");
 
-  // 🆕 État local pour les ordres en cours d'édition
   const [editingOrders, setEditingOrders] = useState<{ [key: string]: string }>({});
 
-  // Charger données
   const fetchData = async () => {
     setLoading(true);
 
@@ -110,31 +108,26 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     fetchData();
   };
 
-  // 🆕 Fonction améliorée pour gérer les ordres sans doublons
   const handleOrderChange = async (exoId: string, newOrder: number) => {
     const exo = exos.find((e) => e.id === exoId);
     if (!exo || newOrder < 1) return;
 
     const oldOrder = exo.order;
-    if (oldOrder === newOrder) return; // Pas de changement
+    if (oldOrder === newOrder) return;
 
-    // Récupérer tous les exercices du même cours
     const sameCourseExos = exos
       .filter((e) => e.course_id === exo.course_id && e.id !== exoId)
       .sort((a, b) => a.order - b.order);
 
     const batch = writeBatch(db);
 
-    // Cas 1 : On monte l'exercice (ex: 5 → 3)
     if (newOrder < oldOrder) {
       sameCourseExos.forEach((e) => {
         if (e.order >= newOrder && e.order < oldOrder) {
           batch.update(doc(db, "exercises", e.id), { order: e.order + 1 });
         }
       });
-    }
-    // Cas 2 : On descend l'exercice (ex: 3 → 5)
-    else if (newOrder > oldOrder) {
+    } else if (newOrder > oldOrder) {
       sameCourseExos.forEach((e) => {
         if (e.order > oldOrder && e.order <= newOrder) {
           batch.update(doc(db, "exercises", e.id), { order: e.order - 1 });
@@ -142,7 +135,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
       });
     }
 
-    // Mettre à jour l'exercice en question
     batch.update(doc(db, "exercises", exoId), { order: newOrder });
 
     await batch.commit();
@@ -154,7 +146,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     fetchData();
   };
 
-  // 🆕 Réorganisation par drag & drop
   const handleDragEnd = async (result: any) => {
     if (!result.destination) return;
 
@@ -172,7 +163,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     fetchData();
   };
 
-  // Filtrage
   const filteredExos = exos
     .filter((e) => {
       const course = courseMap[e.course_id];
@@ -186,7 +176,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     })
     .sort((a, b) => a.order - b.order);
 
-  // Options pour les filtres
   const levelOptions = Array.from(
     new Set(
       Object.values(courseMap)
@@ -216,24 +205,8 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     );
   }
 
-  // 🎨 Badge de difficulté
-  const DifficultyBadge = ({ difficulty }: { difficulty?: string }) => {
-    const colors = {
-      facile: "bg-green-100 text-green-700",
-      moyen: "bg-yellow-100 text-yellow-700",
-      difficile: "bg-red-100 text-red-700",
-    };
-    const color = colors[difficulty as keyof typeof colors] || "bg-gray-100 text-gray-700";
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {difficulty || "moyen"}
-      </span>
-    );
-  };
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      {/* 📁 En-tête */}
       <div className="flex items-center gap-3 mb-6">
         <span className="text-3xl">📚</span>
         <h2 className="text-2xl font-bold text-gray-800">Exercices existants</h2>
@@ -242,7 +215,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
         </span>
       </div>
 
-      {/* 🔍 Filtres */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -299,7 +271,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
         </div>
       </div>
 
-      {/* 📋 Liste */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
@@ -333,7 +304,6 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                             }`}
                         >
                           <div className="flex items-start gap-4">
-                            {/* 🎯 Drag handle */}
                             <div
                               {...provided.dragHandleProps}
                               className="flex-shrink-0 cursor-grab active:cursor-grabbing mt-1"
@@ -343,41 +313,20 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                               </div>
                             </div>
 
-                            {/* 📝 Contenu */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-4 mb-2">
-                                <div className="flex-1">
-                                  <h3 className="font-semibold text-gray-900 text-lg mb-1">
-                                    {exo.title}
-                                  </h3>
-                                  <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium">{course?.title}</span>
-                                    <span className="text-gray-400">•</span>
-                                    <span>{levelMap[course?.levelId]}</span>
-                                    <span className="text-gray-400">•</span>
-                                    <span>{subjectMap[course?.subjectId]}</span>
-                                  </p>
-                                </div>
-                                <DifficultyBadge difficulty={exo.difficulty} />
-                              </div>
-
-                              {exo.tags && exo.tags.length > 0 && (
-                                <div className="flex gap-2 flex-wrap mb-3">
-                                  {exo.tags.map((tag, i) => (
-                                    <span
-                                      key={i}
-                                      className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-medium"
-                                    >
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
+                              <h3 className="font-semibold text-gray-900 text-lg mb-1">
+                                {exo.title}
+                              </h3>
+                              <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{course?.title}</span>
+                                <span className="text-gray-400">•</span>
+                                <span>{levelMap[course?.levelId]}</span>
+                                <span className="text-gray-400">•</span>
+                                <span>{subjectMap[course?.subjectId]}</span>
+                              </p>
                             </div>
 
-                            {/* 🎮 Actions */}
                             <div className="flex items-center gap-2">
-                              {/* 🔢 Input Ordre */}
                               <input
                                 type="number"
                                 min="1"
