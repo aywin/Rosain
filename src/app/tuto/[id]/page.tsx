@@ -128,7 +128,7 @@ export default function TutoPage() {
         const vids: Video[] = await Promise.all(
           videoSnap.docs.map(async (docSnap) => {
             const data = docSnap.data();
-            
+
             // Charger les quizzes
             const quizQuery = query(
               collection(db, "quizzes"),
@@ -147,7 +147,7 @@ export default function TutoPage() {
                 const transcriptData = transcriptDoc.data();
                 setTranscripts(prev => ({
                   ...prev,
-                  [docSnap.id]: transcriptData.transcript || []
+                  [docSnap.id]: transcriptData.segments || []
                 }));
               }
             } catch (error) {
@@ -163,7 +163,7 @@ export default function TutoPage() {
             } as Video;
           })
         );
-        
+
         vids.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
 
@@ -256,9 +256,8 @@ export default function TutoPage() {
     <div className="flex h-screen w-full overflow-hidden relative">
       {/* Sidebar */}
       <div
-        className={`${
-          sidebarOpen ? "block" : "hidden"
-        } fixed top-0 left-0 z-30 h-full w-64 bg-[#f7f7f7] shadow-lg lg:static lg:block`}
+        className={`${sidebarOpen ? "block" : "hidden"
+          } fixed top-0 left-0 z-30 h-full w-64 bg-[#f7f7f7] shadow-lg lg:static lg:block`}
       >
         <Sidebar
           content={content.map(({ id, title, type }) => ({
@@ -359,25 +358,25 @@ export default function TutoPage() {
 
       {/* ✅ Assistant avec contexte complet */}
       {showAssistant && (
-        <div className="fixed right-0 top-0 w-[350px] max-w-full border-l bg-white h-full z-40 shadow-lg">
-          <AssistantPanel 
+        <div className="fixed right-0 top-0 h-full z-40 shadow-lg">
+          <AssistantPanel
             onClose={() => setShowAssistant(false)}
             courseContext={
               currentItem && course
                 ? {
-                    courseTitle: course.titre,
-                    courseLevel: course.niveau,
-                    currentVideoTitle: currentItem.title,
-                    currentVideoUrl: 
-                      currentItem.type === "video" 
-                        ? (currentItem as Video).url 
-                        : "",
-                    currentTime: videoCurrentTime, // ✅ NOUVEAU
-                    transcript: 
-                      currentItem.type === "video"
-                        ? transcripts[currentItem.id] || []
-                        : [], // ✅ NOUVEAU
-                  }
+                  courseTitle: course.titre,
+                  courseLevel: course.niveau,
+                  currentVideoTitle: currentItem.title,
+                  currentVideoUrl:
+                    currentItem.type === "video"
+                      ? (currentItem as Video).url
+                      : "",
+                  currentTime: videoCurrentTime,
+                  transcript:
+                    currentItem.type === "video"
+                      ? transcripts[currentItem.id] || []
+                      : [],
+                }
                 : undefined
             }
           />

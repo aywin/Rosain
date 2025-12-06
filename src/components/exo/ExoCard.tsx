@@ -40,6 +40,7 @@ interface ExoCardProps {
 }
 
 /** Rendering texte + LaTeX (sans conversion Markdown) */
+/** Rendering texte + LaTeX (version simplifiée comme LatexPreview) */
 const renderParagraphs = (text?: string) => {
   if (!text) return null;
 
@@ -51,22 +52,16 @@ const renderParagraphs = (text?: string) => {
     .filter((p) => p.length > 0);
 
   return paragraphs.map((p, i) => {
+    // ✅ Détection simple pour espacement
     const isDisplayBlock = p.startsWith("\\[") || p.startsWith("$$");
-    const isDisplay = isDisplayBlock || needsDisplay(p);
-
-    let content = p;
-    if (isDisplay && !isDisplayBlock && !p.includes("$")) {
-      content = `$${p}$`;
-    }
 
     return (
       <div
         key={i}
-        className={`text-sm leading-relaxed ${isDisplayBlock ? "my-4" : "mb-3"}`}
-        style={{ marginBottom: p.includes("bigskip") ? "1.5em" : undefined }}
+        className={`text-sm leading-relaxed ${isDisplayBlock ? "my-4 text-center" : "mb-3"}`}
       >
         <MathJax dynamic hideUntilTypeset="first">
-          {content}
+          {p}  {/* ← Pas de manipulation, juste le texte preprocessé */}
         </MathJax>
       </div>
     );

@@ -4,6 +4,7 @@ import { X, Send, BookOpen } from "lucide-react";
 import { FaRobot } from "react-icons/fa";
 import { MathJax, MathJaxContext } from "better-react-mathjax";
 import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
+import { buildApiUrl, apiConfig } from "@/config/api";
 
 interface ExoContext {
     id: string;
@@ -166,7 +167,7 @@ export default function ExoAssistantPanel({
                 params.append("conversation_history", history);
             }
 
-            // ✅ CORRIGÉ : Ajouter TOUS les champs des exercices actifs
+            // Ajouter TOUS les champs des exercices actifs
             if (activeExercises.length > 0) {
                 const exercisesList = activeExercises.map(ex => ({
                     id: ex.id,
@@ -182,9 +183,10 @@ export default function ExoAssistantPanel({
                 params.append("active_exercises", JSON.stringify(exercisesList));
             }
 
-            const res = await fetch(
-                `http://127.0.0.1:8000/ai_assistant_exo?${params.toString()}`
-            );
+            // ✅ Utilisation de la config centralisée
+            const apiUrl = buildApiUrl(apiConfig.endpoints.assistant.exo, Object.fromEntries(params));
+
+            const res = await fetch(apiUrl);
 
             const data = await res.json();
 

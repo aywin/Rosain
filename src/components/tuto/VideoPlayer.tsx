@@ -15,14 +15,12 @@ declare global {
   }
 }
 
-// Interface pour la transcription
 interface TranscriptSegment {
   start: number;
   duration: number;
   text: string;
 }
 
-// ✅ CORRECTION : Ajout de onTimeUpdate dans l'interface
 interface VideoPlayerProps {
   url: string;
   title: string;
@@ -32,10 +30,12 @@ interface VideoPlayerProps {
   onNext: () => void;
   quizzes?: Quiz[];
   transcript?: TranscriptSegment[];
-  onTimeUpdate?: (time: number) => void; // ✅ NOUVEAU
+  language?: string;
+  isGenerated?: boolean;
+  isMathJaxFormatted?: boolean;
+  onTimeUpdate?: (time: number) => void;
 }
 
-// ✅ CORRECTION : Destructurer onTimeUpdate dans les props
 export default function VideoPlayer({
   url,
   title,
@@ -45,14 +45,17 @@ export default function VideoPlayer({
   onNext,
   quizzes = [],
   transcript = [],
-  onTimeUpdate, // ✅ NOUVEAU
+  language,
+  isGenerated,
+  isMathJaxFormatted,
+  onTimeUpdate,
 }: VideoPlayerProps) {
-
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
 
   const rafRef = useRef<number | null>(null);
   const onNextRef = useRef(onNext);
+  const lastTimeUpdateRef = useRef<number>(0);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -70,9 +73,15 @@ export default function VideoPlayer({
   const displayedRef = useRef<string[]>([]);
   const savedAnswersRef = useRef<Record<string, Record<number, number>>>({});
 
-  useEffect(() => { onNextRef.current = onNext; }, [onNext]);
-  useEffect(() => { displayedRef.current = displayedQuizzes; }, [displayedQuizzes]);
-  useEffect(() => { savedAnswersRef.current = savedQuizAnswers; }, [savedQuizAnswers]);
+  useEffect(() => {
+    onNextRef.current = onNext;
+  }, [onNext]);
+  useEffect(() => {
+    displayedRef.current = displayedQuizzes;
+  }, [displayedQuizzes]);
+  useEffect(() => {
+    savedAnswersRef.current = savedQuizAnswers;
+  }, [savedQuizAnswers]);
 
   const getVideoId = (url: string) => {
     const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
@@ -80,7 +89,6 @@ export default function VideoPlayer({
   };
   const videoId = getVideoId(url);
 
-  // Reset état à chaque vidéo
   useEffect(() => {
     setAnsweredQuizzes([]);
     setDisplayedQuizzes([]);
@@ -91,9 +99,9 @@ export default function VideoPlayer({
     setDuration(0);
     setIsPlaying(false);
     setCountdown(null);
+    lastTimeUpdateRef.current = 0;
   }, [videoId]);
 
-  // Init YouTube Player
   useEffect(() => {
     if (!videoId || !containerRef.current) {
       setError("URL de la vidéo invalide.");
@@ -152,7 +160,10 @@ export default function VideoPlayer({
     else {
       const tag = document.createElement("script");
       tag.src = "https://www.youtube.com/iframe_api";
-      document.getElementsByTagName("script")[0].parentNode?.insertBefore(tag, document.getElementsByTagName("script")[0]);
+      document.getElementsByTagName("script")[0].parentNode?.insertBefore(
+        tag,
+        document.getElementsByTagName("script")[0]
+      );
       window.onYouTubeIframeAPIReady = initPlayer;
     }
 
@@ -165,7 +176,6 @@ export default function VideoPlayer({
     };
   }, [videoId]);
 
-  // ✅ CORRECTION : Ajout de l'appel onTimeUpdate dans la boucle
   useEffect(() => {
     if (!duration) return;
 
@@ -173,17 +183,18 @@ export default function VideoPlayer({
 
     const loop = () => {
       if (playerRef.current?.getCurrentTime) {
-        const t = playerRef.current.getCurrentTime();
+        const rawTime = playerRef.current.getCurrentTime();
+        const t = Math.round(rawTime * 100) / 100;
+
         setCurrentTime(t);
 
-        // ✅ NOUVEAU : Transmettre le temps au parent (TutoPage)
-        if (onTimeUpdate) {
+        if (onTimeUpdate && t - lastTimeUpdateRef.current >= 0.5) {
+          lastTimeUpdateRef.current = t;
           onTimeUpdate(t);
         }
 
         checkQuiz(t);
 
-        // Log Firestore uniquement si un utilisateur est connecté
         const user = auth.currentUser;
         if (user && videoIdFirestore) {
           if (t - lastLogged >= 5 || t === duration) {
@@ -206,20 +217,13 @@ export default function VideoPlayer({
         }
       }
 
-      // Toujours continuer la boucle, même sans user
       if (isPlaying) rafRef.current = requestAnimationFrame(loop);
     };
 
     if (isPlaying) rafRef.current = requestAnimationFrame(loop);
 
     return () => stopProgressLoop();
-  }, [
-    isPlaying,
-    duration,
-    videoIdFirestore ?? null,
-    courseId ?? null,
-    onTimeUpdate, // ✅ AJOUT dans les dépendances
-  ]);
+  }, [isPlaying, duration, videoIdFirestore, courseId, onTimeUpdate]);
 
   const startProgressLoop = () => {
     stopProgressLoop();
@@ -233,14 +237,18 @@ export default function VideoPlayer({
     }
   };
 
-  // Gestion quizzes
-  const sortedQuizzes = useMemo(() => [...quizzes].sort((a, b) => a.timestamp - b.timestamp), [quizzes]);
+  const sortedQuizzes = useMemo(
+    () => [...quizzes].sort((a, b) => a.timestamp - b.timestamp),
+    [quizzes]
+  );
 
   const checkQuiz = (current: number) => {
-    const nextQuiz = sortedQuizzes.find(q => Math.abs(current - q.timestamp) < 0.5 && !displayedRef.current.includes(q.id));
+    const nextQuiz = sortedQuizzes.find(
+      (q) => Math.abs(current - q.timestamp) < 0.5 && !displayedRef.current.includes(q.id)
+    );
     if (nextQuiz) {
       setCurrentQuiz(nextQuiz);
-      setDisplayedQuizzes(prev => [...prev, nextQuiz.id]);
+      setDisplayedQuizzes((prev) => [...prev, nextQuiz.id]);
       setSelectedAnswers(savedAnswersRef.current[nextQuiz.id] || {});
       playerRef.current.pauseVideo();
       stopProgressLoop();
@@ -248,7 +256,7 @@ export default function VideoPlayer({
   };
 
   const handleAnswerChange = (qIndex: number, aIndex: number) => {
-    setSelectedAnswers(prev => {
+    setSelectedAnswers((prev) => {
       const copy = { ...prev };
       if (aIndex === -1) delete copy[qIndex];
       else copy[qIndex] = aIndex;
@@ -262,7 +270,7 @@ export default function VideoPlayer({
 
     const correctAnswers: Record<number, number> = {};
     currentQuiz.questions.forEach((q, i) => {
-      correctAnswers[i] = q.answers.findIndex(a => a.correct);
+      correctAnswers[i] = q.answers.findIndex((a) => a.correct);
     });
 
     const userAnswers = { ...selectedAnswers };
@@ -272,7 +280,6 @@ export default function VideoPlayer({
     ).length;
     const score = Math.round((correctCount / total) * 100);
 
-    // Enregistrer seulement si un user est connecté
     if (user && videoIdFirestore) {
       logQuizResponse({
         quizId: currentQuiz.id,
@@ -286,13 +293,11 @@ export default function VideoPlayer({
       });
     }
 
-    // Toujours enregistrer localement (même pour invités)
-    setSavedQuizAnswers(prev => ({ ...prev, [currentQuiz.id]: selectedAnswers }));
-    setAnsweredQuizzes(prev => [...prev, currentQuiz.id]);
+    setSavedQuizAnswers((prev) => ({ ...prev, [currentQuiz.id]: selectedAnswers }));
+    setAnsweredQuizzes((prev) => [...prev, currentQuiz.id]);
     setSelectedAnswers({});
     setCurrentQuiz(null);
 
-    // Reprendre la lecture pour tout le monde
     if (playerRef.current) {
       const newTime = Math.min(timestamp, duration);
       playerRef.current.seekTo(newTime, true);
@@ -305,7 +310,9 @@ export default function VideoPlayer({
   const handlePlayPause = () => {
     if (!playerRef.current) return;
     const state = playerRef.current.getPlayerState();
-    state === window.YT.PlayerState.PLAYING ? playerRef.current.pauseVideo() : playerRef.current.playVideo();
+    state === window.YT.PlayerState.PLAYING
+      ? playerRef.current.pauseVideo()
+      : playerRef.current.playVideo();
     state === window.YT.PlayerState.PLAYING ? stopProgressLoop() : startProgressLoop();
   };
 
@@ -313,11 +320,15 @@ export default function VideoPlayer({
     if (!playerRef.current?.seekTo) return;
     newTime = Math.max(0, Math.min(newTime, duration));
 
-    // Vérifie si un quiz est entre l'ancien temps et le nouveau
-    const nextQuiz = sortedQuizzes.find(q => currentTime < q.timestamp && q.timestamp <= newTime && !answeredQuizzes.includes(q.id));
+    const nextQuiz = sortedQuizzes.find(
+      (q) =>
+        currentTime < q.timestamp &&
+        q.timestamp <= newTime &&
+        !answeredQuizzes.includes(q.id)
+    );
     if (nextQuiz) {
       setCurrentQuiz(nextQuiz);
-      setDisplayedQuizzes(prev => [...prev, nextQuiz.id]);
+      setDisplayedQuizzes((prev) => [...prev, nextQuiz.id]);
       setSelectedAnswers(savedAnswersRef.current[nextQuiz.id] || {});
       playerRef.current.pauseVideo();
       stopProgressLoop();
@@ -326,10 +337,12 @@ export default function VideoPlayer({
       return;
     }
 
-    setDisplayedQuizzes(prev => prev.filter(id => {
-      const quiz = sortedQuizzes.find(q => q.id === id);
-      return quiz && newTime < quiz.timestamp;
-    }));
+    setDisplayedQuizzes((prev) =>
+      prev.filter((id) => {
+        const quiz = sortedQuizzes.find((q) => q.id === id);
+        return quiz && newTime < quiz.timestamp;
+      })
+    );
 
     playerRef.current.seekTo(newTime, true);
     setCurrentTime(newTime);
@@ -359,7 +372,10 @@ export default function VideoPlayer({
         <>
           <div className="relative w-[70%] aspect-video rounded-lg overflow-hidden shadow-lg">
             <div ref={containerRef} className="w-full h-full pointer-events-none" />
-            <div className="absolute inset-0 z-10 cursor-pointer" onClick={handlePlayPause} />
+            <div
+              className="absolute inset-0 z-10 cursor-pointer"
+              onClick={handlePlayPause}
+            />
           </div>
 
           <ProgressBar currentTime={currentTime} duration={duration} onSeek={handleSeek} />
@@ -379,7 +395,10 @@ export default function VideoPlayer({
                 Prochain chapitre dans <span className="font-bold">{countdown}</span> sec...
               </p>
               <button
-                onClick={() => { setCountdown(null); onNextRef.current?.(); }}
+                onClick={() => {
+                  setCountdown(null);
+                  onNextRef.current?.();
+                }}
                 className="ml-4 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
               >
                 Passer maintenant →
@@ -394,11 +413,13 @@ export default function VideoPlayer({
             Ouvrir Assistant IA →
           </button>
 
-          {/* Affichage de la transcription */}
           <VideoTranscript
             transcript={transcript}
             currentTime={currentTime}
             onSeek={handleSeek}
+            language={language}
+            isGenerated={isGenerated}
+            isMathJaxFormatted={isMathJaxFormatted}
           />
 
           {currentQuiz && (
