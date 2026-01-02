@@ -4,7 +4,29 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { setDoc, doc } from "firebase/firestore";
-import { PLAN_LIMITS, type Plan } from "@/type/quota";
+import type { Plan, ServiceLimit, Quota } from "@/type/quota";
+
+// Limites par plan
+const PLAN_LIMITS: Record<Plan, ServiceLimit> = {
+  gratuit: {
+    exo_assistant: 5,
+    video_assistant: 5,
+    image_upload: 3,
+  },
+  eleve: {
+    exo_assistant: 20,
+    video_assistant: 20,
+    image_upload: 10,
+  },
+  famille: {
+    exo_assistant: 50,
+    video_assistant: 50,
+    image_upload: 25,
+  },
+};
+
+const DEFAULT_PLAN: Plan = "gratuit";
+
 
 export default function SignupForm() {
   const router = useRouter();
@@ -35,8 +57,7 @@ export default function SignupForm() {
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const userId = userCred.user.uid;
 
-      // Déterminer le plan initial (toujours gratuit à l'inscription)
-      const initialPlan: Plan = "gratuit";
+
 
       // 1️⃣ Créer le document utilisateur
       await setDoc(doc(db, "users", userId), {
@@ -44,7 +65,7 @@ export default function SignupForm() {
         prenom: form.prenom,
         email: form.email,
         role: form.role, // eleve, parent, tuteur
-        plan: initialPlan,
+        plan: DEFAULT_PLAN,
         statut_paiement: false,
         id_ecole: null,
         linkedStudents: [], // pour parent/tuteur
@@ -56,8 +77,8 @@ export default function SignupForm() {
       // 2️⃣ Créer le document quota (🆕 NOUVEAU)
       await setDoc(doc(db, "quotas", userId), {
         user_id: userId,
-        plan: initialPlan,
-        daily_limits: PLAN_LIMITS[initialPlan],
+        plan: DEFAULT_PLAN,
+        daily_limits: PLAN_LIMITS[DEFAULT_PLAN],
         usage_today: {
           exo_assistant: 0,
           video_assistant: 0,
@@ -66,7 +87,7 @@ export default function SignupForm() {
         last_reset: new Date(),
         created_at: new Date(),
         updated_at: new Date(),
-      });
+      } as Quota);
 
       console.log("✅ Utilisateur et quota créés avec succès");
       router.push("/");
