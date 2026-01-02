@@ -2,7 +2,7 @@
 
 import ProtectSuperAdminRoute from "@/components/auth/ProtectSuperAdminRoute";
 import { useRouter } from "next/navigation";
-import { BookOpen, Clipboard, Video, CheckSquare ,  Tag, BarChart2, FileText } from "lucide-react";
+import { BookOpen, Video, CheckSquare, Tag, BarChart2, FileText, TrendingUp } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function AdminDashboardPage() {
     { name: "Quiz", path: "/admin/quiz", icon: <CheckSquare size={20} /> },
     { name: "Matières", path: "/admin/subjects", icon: <Tag size={20} /> },
     { name: "Niveaux", path: "/admin/levels", icon: <BarChart2 size={20} /> },
+    { name: "Limites Quota", path: "/admin/quota-limit", icon: <TrendingUp size={20} /> }, // ✅ Nouveau bouton
   ];
 
   return (

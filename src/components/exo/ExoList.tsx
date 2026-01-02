@@ -1,7 +1,8 @@
+//ExoList.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { db, auth } from "@/firebase";
+import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoFilters from "./ExoFilters";
 import ExoCard from "./ExoCard";
@@ -30,6 +31,7 @@ interface Exo {
   difficulty?: string;
   level_id?: string;
   subject_id?: string;
+  course_ids?: string[];
   course_id?: string;
   order?: number;
   statement_text?: string;
@@ -46,12 +48,11 @@ export default function ExoList() {
   const [exos, setExos] = useState<Exo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filtres
   const [levelId, setLevelId] = useState("");
   const [subjectId, setSubjectId] = useState("");
-  const [courseId, setCourseId] = useState("");
+  const [courseIds, setCourseIds] = useState<string[]>([]);
+  const [filterMode, setFilterMode] = useState<"any" | "all">("any");
 
-  // Ouvertures
   const [openStatementIds, setOpenStatementIds] = useState<Set<string>>(new Set());
   const [openSolutionIds, setOpenSolutionIds] = useState<Set<string>>(new Set());
 
@@ -71,7 +72,6 @@ export default function ExoList() {
     });
   };
 
-  // Gestion de la sélection pour l'assistant
   const [showAssistant, setShowAssistant] = useState(false);
   const [currentExoContext, setCurrentExoContext] = useState<any>(null);
   const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
@@ -97,7 +97,6 @@ export default function ExoList() {
       setCourses(sortedCourses);
       setExos(exosData);
 
-      // Initialiser les filtres par défaut : Terminal + Maths + cours order=1
       const terminalLevel = levelsData.find((l) => l.name === "Terminal");
       const mathsSubject = subjectsData.find((s) => s.name === "Maths");
 
@@ -109,7 +108,7 @@ export default function ExoList() {
         if (firstCourse) {
           setLevelId(terminalLevel.id);
           setSubjectId(mathsSubject.id);
-          setCourseId(firstCourse.id);
+          setCourseIds(firstCourse ? [firstCourse.id] : []); // ✨ Array
         }
       }
 
@@ -134,7 +133,6 @@ export default function ExoList() {
     setCurrentExoContext(exoContext);
     setShowAssistant(true);
 
-    // Auto-sélectionner cet exercice s'il ne l'est pas déjà
     setSelectedExerciseIds(prev => {
       const newSet = new Set(prev);
       newSet.add(exoContext.id);
@@ -142,11 +140,20 @@ export default function ExoList() {
     });
   };
 
+  // Remplace la section selectedExercises (lignes 147-159) par ceci :
+
   const selectedExercises = exos
     .filter(exo => selectedExerciseIds.has(exo.id))
     .map(exo => {
       const level = levels.find(l => l.id === exo.level_id);
       const subject = subjects.find(s => s.id === exo.subject_id);
+
+      // ✨ Récupérer les cours associés pour exercices multi-thématiques
+      const exoCourseIds = exo.course_ids || (exo.course_id ? [exo.course_id] : []);
+      const exoCourses = courses
+        .filter(c => exoCourseIds.includes(c.id))
+        .map(c => c.title);
+
       return {
         id: exo.id,
         title: exo.title,
@@ -156,7 +163,9 @@ export default function ExoList() {
         tags: exo.tags,
         level: level?.name,
         subject: subject?.name,
-        order: exo.order
+        order: exo.order,
+        courses: exoCourses,                      // ✨ Liste des cours
+        isMultiCourse: exoCourseIds.length > 1    // ✨ Flag multi-thématiques
       };
     });
 
@@ -172,6 +181,24 @@ export default function ExoList() {
   const currentLevel = levels.find(l => l.id === levelId);
   const currentSubject = subjects.find(s => s.id === subjectId);
 
+  // ✨ Nouvelle logique de filtrage des exercices
+  const filteredExos = exos.filter((e) => {
+    const exoCourseIds = e.course_ids || (e.course_id ? [e.course_id] : []);
+
+    if (courseIds.length === 0) {
+      // Aucun cours sélectionné = afficher tous les exercices du niveau/matière
+      return true;
+    }
+
+    if (filterMode === "any") {
+      // Mode "Au moins 1" : l'exercice doit avoir au moins un des cours sélectionnés
+      return courseIds.some(id => exoCourseIds.includes(id));
+    } else {
+      // Mode "Tous" : l'exercice doit avoir TOUS les cours sélectionnés
+      return courseIds.every(id => exoCourseIds.includes(id));
+    }
+  }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -185,20 +212,20 @@ export default function ExoList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Filtres en position sticky */}
       <ExoFilters
         levels={levels}
         subjects={subjects}
         courses={filteredCourses}
         levelId={levelId}
         subjectId={subjectId}
-        courseId={courseId}
+        courseIds={courseIds} // ✨ Changé
         setLevelId={setLevelId}
         setSubjectId={setSubjectId}
-        setCourseId={setCourseId}
+        setCourseIds={setCourseIds} // ✨ Changé
+        filterMode={filterMode} // ✨ Nouveau
+        setFilterMode={setFilterMode} // ✨ Nouveau
       />
 
-      {/* Bouton flottant Assistant IA - Version Desktop */}
       {!showAssistant && (
         <button
           onClick={openGeneralAssistant}
@@ -215,7 +242,6 @@ export default function ExoList() {
         </button>
       )}
 
-      {/* Bouton flottant Assistant IA - Version Mobile */}
       {!showAssistant && (
         <button
           onClick={openGeneralAssistant}
@@ -231,24 +257,73 @@ export default function ExoList() {
         </button>
       )}
 
-      {/* Contenu principal */}
       <div className="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-8 pb-20 md:pb-8">
-        {filteredCourses.length === 0 ? (
+        {filteredExos.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-gray-500 text-base md:text-lg">Aucun cours trouvé pour cette sélection.</p>
+            <p className="text-gray-500 text-base md:text-lg">
+              {courseIds.length > 1 && filterMode === "all"
+                ? "Aucun exercice ne combine tous ces cours"
+                : "Aucun exercice trouvé pour cette sélection"}
+            </p>
           </div>
         ) : (
-          <div className="space-y-4 md:space-y-8">
-            {filteredCourses.map((course) => {
-              const courseExos = exos
-                .filter((e) => e.course_id === course.id && (!courseId || e.course_id === courseId))
-                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          <div className="space-y-6">
+            {/* Affichage par cours (si aucun filtre de cours) */}
+            {courseIds.length === 0 ? (
+              filteredCourses.map((course) => {
+                const courseExos = filteredExos.filter((e) => {
+                  const exoCourseIds = e.course_ids || (e.course_id ? [e.course_id] : []);
+                  return exoCourseIds.includes(course.id);
+                });
 
-              if (courseExos.length === 0) return null;
+                if (courseExos.length === 0) return null;
 
-              return (
-                <div key={course.id} className="space-y-4 md:space-y-6">
-                  {courseExos.map((exo) => (
+                return (
+                  <div key={course.id} className="space-y-4">
+                    <h3 className="text-xl font-bold text-gray-800 border-b-2 border-blue-500 pb-2 flex items-center justify-between">
+                      <span>{course.title}</span>
+                      <span className="text-sm font-normal text-gray-500">
+                        {courseExos.length} exercice{courseExos.length > 1 ? 's' : ''}
+                      </span>
+                    </h3>
+
+                    {courseExos.map((exo) => (
+                      <ExoCard
+                        key={exo.id}
+                        exo={exo}
+                        levels={levels}
+                        subjects={subjects}
+                        courses={courses}
+                        openStatementIds={openStatementIds}
+                        openSolutionIds={openSolutionIds}
+                        toggleStatement={toggleStatement}
+                        toggleSolution={toggleSolution}
+                        onAssistantClick={handleAssistantClick}
+                        isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
+                        onToggleSelection={toggleExerciseSelection}
+                      />
+                    ))}
+                  </div>
+                );
+              })
+            ) : (
+              // Affichage direct (avec filtres de cours)
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-800">
+                    {filterMode === "all" && courseIds.length > 1
+                      ? `Exercices combinant ${courseIds.length} cours`
+                      : `${filteredExos.length} exercice${filteredExos.length > 1 ? 's' : ''} trouvé${filteredExos.length > 1 ? 's' : ''}`}
+                  </h3>
+                  {filterMode === "all" && courseIds.length > 1 && (
+                    <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+                      🔗 Multi-thématiques
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  {filteredExos.map((exo) => (
                     <ExoCard
                       key={exo.id}
                       exo={exo}
@@ -265,13 +340,12 @@ export default function ExoList() {
                     />
                   ))}
                 </div>
-              );
-            })}
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* Panel Assistant IA - Version Desktop */}
       {showAssistant && (
         <div className="hidden md:block fixed right-0 top-0 w-[450px] max-w-full h-full bg-white shadow-2xl z-50 border-l">
           <ExoAssistantPanel
@@ -287,10 +361,8 @@ export default function ExoList() {
         </div>
       )}
 
-      {/* Panel Assistant IA - Version Mobile (Full screen) */}
       {showAssistant && (
         <div className="md:hidden fixed inset-0 bg-white z-50 flex flex-col">
-          {/* Header mobile avec bouton retour */}
           <div className="bg-green-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
             <div className="flex items-center gap-3">
               <FaRobot className="text-xl" />
@@ -307,7 +379,6 @@ export default function ExoList() {
             </button>
           </div>
 
-          {/* Contenu du panel */}
           <div className="flex-1 overflow-hidden">
             <ExoAssistantPanel
               onClose={() => {

@@ -1,7 +1,8 @@
+//ExoForm.tsx - Version mise à jour
 "use client";
 import { useState, useEffect } from "react";
 import { ExoFormState } from "@/components/types";
-import CourseSelectors from "./CourseSelector";
+import CourseSelector from "./CourseSelector";
 import LatexPreview from "./LatexPreview";
 import FileInputList from "./FileInputList";
 import { db } from "@/firebase";
@@ -25,7 +26,7 @@ export default function ExoForm({
     description: initial.description || "",
     level_id: initial.level_id || "",
     subject_id: initial.subject_id || "",
-    course_id: initial.course_id || "",
+    course_ids: initial.course_ids || [],  // ← Changé
     order: initial.order || 0,
     difficulty: initial.difficulty || "moyen",
     statement_text: initial.statement_text || "",
@@ -35,13 +36,13 @@ export default function ExoForm({
     tags: initial.tags || [],
   });
 
-  // 🔎 Chercher le plus petit ordre dispo dans un cours
-  const fetchNextOrder = async (courseId: string) => {
-    if (!courseId) return;
+  // 🔎 Chercher le plus petit ordre dispo (basé sur le premier cours sélectionné)
+  const fetchNextOrder = async (courseIds: string[]) => {
+    if (!courseIds || courseIds.length === 0) return;
 
     const q = query(
-      collection(db, "exercises"), // ta collection Firestore
-      where("course_id", "==", courseId)
+      collection(db, "exercises"),
+      where("course_ids", "array-contains", courseIds[0])
     );
     const snapshot = await getDocs(q);
 
@@ -55,16 +56,19 @@ export default function ExoForm({
     setFormState((prev) => ({ ...prev, order: next }));
   };
 
-  // ⚡ Recalcul de l’ordre quand on change de cours
+  // ⚡ Recalcul de l'ordre quand on change les cours
   useEffect(() => {
-    if (formState.course_id && !editMode) {
-      fetchNextOrder(formState.course_id);
+    if (formState.course_ids.length > 0 && !editMode) {
+      fetchNextOrder(formState.course_ids);
     }
-  }, [formState.course_id]);
+  }, [formState.course_ids]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!formState.title.trim() || !formState.course_id) return;
+    if (!formState.title.trim() || formState.course_ids.length === 0) {
+      alert("Veuillez renseigner un titre et au moins un cours");
+      return;
+    }
 
     const tags =
       typeof formState.tags === "string"
@@ -79,7 +83,7 @@ export default function ExoForm({
         description: "",
         level_id: "",
         subject_id: "",
-        course_id: "",
+        course_ids: [],  // ← Changé
         order: 0,
         difficulty: "moyen",
         statement_text: "",
@@ -115,11 +119,11 @@ export default function ExoForm({
         }
       />
 
-      {/* Sélecteurs Niveau, Matière, Cours */}
-      <CourseSelectors
+      {/* Sélecteurs Niveau, Matière, Cours (multi) */}
+      <CourseSelector
         levelId={formState.level_id}
         subjectId={formState.subject_id}
-        courseId={formState.course_id}
+        courseIds={formState.course_ids}  // ← Changé
         setFormState={setFormState}
       />
 
@@ -131,7 +135,7 @@ export default function ExoForm({
             className="border px-2 py-1 rounded w-20"
             type="number"
             value={formState.order}
-            readOnly // 🔒 auto-rempli
+            readOnly
           />
         </div>
 
@@ -182,7 +186,6 @@ export default function ExoForm({
         }
         placeholder="Texte de l'énoncé (support LaTeX avec $...$ ou $$...$$)"
       />
-      {/* Fichiers Énoncé */}
 
       <FileInputList
         label="Lien(s) fichier(s) énoncé"
@@ -201,9 +204,7 @@ export default function ExoForm({
         }
         placeholder="Solution (texte, LaTeX supporté)"
       />
-     
 
-      {/* Fichiers Solution */}
       <FileInputList
         label="Lien(s) fichier(s) solution"
         files={formState.solution_files}

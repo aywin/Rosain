@@ -358,7 +358,7 @@ export default function TutoPage() {
 
       {/* ✅ Assistant avec contexte complet */}
       {showAssistant && (
-        <div className="fixed right-0 top-0 h-full z-40 shadow-lg">
+        <div className="fixed right-0 top-0 h-screen z-50 shadow-2xl">
           <AssistantPanel
             onClose={() => setShowAssistant(false)}
             courseContext={

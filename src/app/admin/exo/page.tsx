@@ -1,3 +1,4 @@
+//exo/page.tsx
 "use client";
 
 import ExoForm from "@/components/admin/exo/ExoForm";

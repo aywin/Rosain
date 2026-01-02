@@ -1,3 +1,4 @@
+//LatexPreview.tsx
 "use client";
 
 import { MathJax } from "better-react-mathjax";

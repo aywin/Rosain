@@ -4,6 +4,7 @@ import { X, Send, GripVertical } from "lucide-react";
 import { MathJax } from "better-react-mathjax";
 import { preprocessLatex, needsDisplay } from "@/components/admin/utils/latexUtils";
 import { apiConfig } from "@/config/api";
+import { auth } from "@/firebase";
 
 interface TranscriptSegment {
   start: number;
@@ -124,8 +125,24 @@ export default function AssistantPanel({ onClose, courseContext }: AssistantPane
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // Dans AssistantPanel.tsx - Remplacer la fonction askAI (ligne ~106)
+
   const askAI = async () => {
     if (!question.trim()) return;
+
+    // ✅ Récupérer l'user ID
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      console.error("User non connecté");
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "❌ Vous devez être connecté pour utiliser l'assistant.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -146,6 +163,7 @@ export default function AssistantPanel({ onClose, courseContext }: AssistantPane
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          user_id: userId,
           question: userMessage.content,
           grade: courseContext?.courseLevel || "5e",
           subject: "Math",
@@ -158,26 +176,74 @@ export default function AssistantPanel({ onClose, courseContext }: AssistantPane
         }),
       });
 
+      // ✅ Gérer spécifiquement l'erreur 429 (quota dépassé)
+      if (res.status === 429) {
+        const errorData = await res.json();
+
+        // Calculer l'heure de réinitialisation (minuit UTC)
+        const now = new Date();
+        const midnight = new Date(Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate() + 1,
+          0, 0, 0
+        ));
+        const hoursUntilReset = Math.floor((midnight.getTime() - now.getTime()) / (1000 * 60 * 60));
+        const minutesUntilReset = Math.floor(((midnight.getTime() - now.getTime()) % (1000 * 60 * 60)) / (1000 * 60));
+
+        const quotaMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `🚫 Limite quotidienne atteinte !
+
+Vous avez utilisé vos ${errorData.quota?.used || 0} questions vidéo disponibles aujourd'hui.
+
+⏰ Réinitialisation dans ${hoursUntilReset}h${minutesUntilReset.toString().padStart(2, '0')} (minuit UTC)
+
+💡 En attendant :
+• Revenez demain pour poser plus de questions
+• Relisez la transcription disponible
+• Consultez vos notes de cours
+
+${errorData.quota?.plan === "gratuit" ? "🎯 Passez au plan Élève pour 75 questions vidéo/jour !" : ""}`,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => [...prev, quotaMessage]);
+        setLoading(false);
+        textareaRef.current?.focus();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Erreur API: ${res.status}`);
+      }
+
       const data = await res.json();
-      setMessages(prev => [...prev, {
+
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.response || data.error || "Erreur",
+        content: data.response || "Désolé, je n'ai pas pu générer de réponse.",
         timestamp: new Date(),
-      }]);
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
     } catch (error) {
-      setMessages(prev => [...prev, {
+      console.error("Erreur lors de l'appel API:", error);
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "❌ Erreur de connexion",
+        content: "❌ Une erreur s'est produite. Réessaye plus tard.",
         timestamp: new Date(),
-      }]);
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
       textareaRef.current?.focus();
     }
   };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

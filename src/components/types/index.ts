@@ -16,6 +16,7 @@ export interface Course {
   title: string;
   subject_id: string;
   level_id: string;
+  order?: number;
 }
 
 export interface ExoFormState {
@@ -23,7 +24,7 @@ export interface ExoFormState {
   description: string;
   level_id: string;
   subject_id: string;
-  course_id: string;
+  course_ids: string[];
   order: number;
   difficulty: "facile" | "moyen" | "difficile";
   statement_text: string;
@@ -31,4 +32,21 @@ export interface ExoFormState {
   solution_text: string;
   solution_files: string[];
   tags: string[] | string;
+}
+
+export interface Exo {
+  id: string;
+  title: string;
+  description?: string;
+  difficulty?: string;
+  level_id?: string;
+  subject_id?: string;
+  course_ids?: string[];
+  course_id?: string; // Rétrocompatibilité
+  order?: number;
+  statement_text?: string;
+  solution_text?: string;
+  statement_files?: string[];
+  solution_files?: string[];
+  tags?: string[];
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { setDoc, doc } from "firebase/firestore";
+import { PLAN_LIMITS, type Plan } from "@/type/quota";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -34,21 +35,43 @@ export default function SignupForm() {
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const userId = userCred.user.uid;
 
+      // Déterminer le plan initial (toujours gratuit à l'inscription)
+      const initialPlan: Plan = "gratuit";
+
+      // 1️⃣ Créer le document utilisateur
       await setDoc(doc(db, "users", userId), {
         nom: form.nom,
         prenom: form.prenom,
         email: form.email,
         role: form.role, // eleve, parent, tuteur
+        plan: initialPlan,
         statut_paiement: false,
         id_ecole: null,
         linkedStudents: [], // pour parent/tuteur
         pendingChildrenEmails: childrenEmails, // emails ajoutés
         createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
+      // 2️⃣ Créer le document quota (🆕 NOUVEAU)
+      await setDoc(doc(db, "quotas", userId), {
+        user_id: userId,
+        plan: initialPlan,
+        daily_limits: PLAN_LIMITS[initialPlan],
+        usage_today: {
+          exo_assistant: 0,
+          video_assistant: 0,
+          image_upload: 0,
+        },
+        last_reset: new Date(),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      console.log("✅ Utilisateur et quota créés avec succès");
       router.push("/");
     } catch (err: any) {
-      console.error("Erreur inscription :", err);
+      console.error("❌ Erreur inscription :", err);
       let message = "Une erreur est survenue. Veuillez réessayer.";
       switch (err.code) {
         case "auth/email-already-in-use":
@@ -132,27 +155,27 @@ export default function SignupForm() {
         <div className="mb-4">
           <label className="block font-semibold mb-2">Ajouter un enfant (optionnel)</label>
           {childrenEmails.map((email, index) => (
-  <div key={index} className="flex items-center mb-2">
-    <input
-      type="email"
-      placeholder="Email de l'enfant"
-      value={email}
-      onChange={(e) => handleChildEmailChange(index, e.target.value)}
-      className="input w-full"
-    />
-    <button
-      type="button"
-      onClick={() => {
-        const newEmails = [...childrenEmails];
-        newEmails.splice(index, 1); // supprime le champ à cet index
-        setChildrenEmails(newEmails);
-      }}
-      className="ml-2 text-red-600 font-bold"
-    >
-      ❌
-    </button>
-  </div>
-))}
+            <div key={index} className="flex items-center mb-2">
+              <input
+                type="email"
+                placeholder="Email de l'enfant"
+                value={email}
+                onChange={(e) => handleChildEmailChange(index, e.target.value)}
+                className="input w-full"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const newEmails = [...childrenEmails];
+                  newEmails.splice(index, 1);
+                  setChildrenEmails(newEmails);
+                }}
+                className="ml-2 text-red-600 font-bold"
+              >
+                ❌
+              </button>
+            </div>
+          ))}
 
           <button
             type="button"

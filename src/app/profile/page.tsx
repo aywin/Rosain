@@ -5,7 +5,7 @@ import { auth, db } from "@/firebase";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { User, BookOpen, CheckCircle, TrendingUp, Users } from "lucide-react";
+import { User, BookOpen, CheckCircle, TrendingUp, Users, BarChart3 } from "lucide-react"; // ✅ Import BarChart3
 
 interface UserData {
   nom: string;
@@ -133,6 +133,23 @@ export default function ProfilePage() {
           progress={progressPercent}
           barColor={colors.primaryBlue}
         />
+      </div>
+
+      {/* ✅ NOUVELLE SECTION - Quotas IA */}
+      <div className="rounded-xl shadow p-6 mb-8" style={{ backgroundColor: "#F0F9FF" }}>
+        <h2 className="text-xl font-semibold mb-4 flex items-center" style={{ color: colors.darkBlue }}>
+          <BarChart3 className="mr-2" style={{ color: colors.primaryBlue }} /> Mes Quotas IA
+        </h2>
+        <p className="text-gray-600 mb-4">
+          Consultez votre utilisation quotidienne des assistants vidéo et exercices
+        </p>
+        <Link
+          href="/quota-ai"
+          className="inline-block px-6 py-3 rounded-lg font-medium transition text-white"
+          style={{ backgroundColor: colors.primaryBlue }}
+        >
+          Voir mes quotas →
+        </Link>
       </div>
 
       {/* Pupils section */}

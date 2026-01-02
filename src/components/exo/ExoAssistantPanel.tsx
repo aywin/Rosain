@@ -5,6 +5,7 @@ import { FaRobot } from "react-icons/fa";
 import { MathJax, MathJaxContext } from "better-react-mathjax";
 import { mathJaxConfig } from "@/components/admin/utils/mathjaxConfig";
 import { buildApiUrl, apiConfig } from "@/config/api";
+import { auth } from "@/firebase"; // ✅ Import Firebase auth
 
 interface ExoContext {
     id: string;
@@ -122,6 +123,20 @@ export default function ExoAssistantPanel({
     const askAI = async () => {
         if (!question.trim()) return;
 
+        // Récupérer l'user ID
+        const userId = auth.currentUser?.uid;
+        if (!userId) {
+            console.error("User non connecté");
+            const errorMessage: Message = {
+                id: Date.now().toString(),
+                role: "assistant",
+                content: "❌ Vous devez être connecté pour utiliser l'assistant.",
+                timestamp: new Date(),
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            return;
+        }
+
         const userMessage: Message = {
             id: Date.now().toString(),
             role: "user",
@@ -135,6 +150,7 @@ export default function ExoAssistantPanel({
 
         try {
             const params = new URLSearchParams({
+                user_id: userId,
                 question: userMessage.content,
                 user_level: userLevel,
                 user_subject: userSubject,
@@ -183,10 +199,53 @@ export default function ExoAssistantPanel({
                 params.append("active_exercises", JSON.stringify(exercisesList));
             }
 
-            // ✅ Utilisation de la config centralisée
+            // Utilisation de la config centralisée
             const apiUrl = buildApiUrl(apiConfig.endpoints.assistant.exo, Object.fromEntries(params));
 
             const res = await fetch(apiUrl);
+
+            // ✅ Gérer spécifiquement l'erreur 429 (quota dépassé)
+            if (res.status === 429) {
+                const errorData = await res.json();
+
+                // Calculer l'heure de réinitialisation (minuit UTC)
+                const now = new Date();
+                const midnight = new Date(Date.UTC(
+                    now.getUTCFullYear(),
+                    now.getUTCMonth(),
+                    now.getUTCDate() + 1,
+                    0, 0, 0
+                ));
+                const hoursUntilReset = Math.floor((midnight.getTime() - now.getTime()) / (1000 * 60 * 60));
+                const minutesUntilReset = Math.floor(((midnight.getTime() - now.getTime()) % (1000 * 60 * 60)) / (1000 * 60));
+
+                const quotaMessage: Message = {
+                    id: (Date.now() + 1).toString(),
+                    role: "assistant",
+                    content: `🚫 Limite quotidienne atteinte !
+
+Vous avez utilisé vos ${errorData.quota?.used || 0} questions disponibles aujourd'hui.
+
+⏰ Réinitialisation dans ${hoursUntilReset}h${minutesUntilReset.toString().padStart(2, '0')} (minuit UTC)
+
+💡 En attendant :
+• Revenez demain pour poser plus de questions
+• Consultez les corrections disponibles
+• Relisez vos cours
+
+${errorData.quota?.plan === "gratuit" ? "🎯 Passez au plan Élève pour 150 questions/jour !" : ""}`,
+                    timestamp: new Date(),
+                };
+
+                setMessages(prev => [...prev, quotaMessage]);
+                setLoading(false);
+                textareaRef.current?.focus();
+                return;
+            }
+
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
 
             const data = await res.json();
 
@@ -199,10 +258,11 @@ export default function ExoAssistantPanel({
 
             setMessages(prev => [...prev, assistantMessage]);
         } catch (error) {
+            console.error("Erreur assistant:", error);
             const errorMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
-                content: "❌ Erreur lors de la requête à l'assistant.",
+                content: "❌ Erreur lors de la requête à l'assistant.\n\nVeuillez réessayer dans quelques instants.",
                 timestamp: new Date(),
             };
             setMessages(prev => [...prev, errorMessage]);
@@ -211,7 +271,6 @@ export default function ExoAssistantPanel({
             textareaRef.current?.focus();
         }
     };
-
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();

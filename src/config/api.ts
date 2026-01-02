@@ -21,6 +21,7 @@ export const apiConfig = {
             chat: '/ai_assistant_chat',
             exo: '/ai_assistant_exo',
         },
+        quota: '/quota', // ✅ Nouveau endpoint
     },
 
     // Timeout par défaut (30 secondes)

@@ -16,7 +16,7 @@ interface Exo {
   difficulty?: string;
   level_id?: string;
   subject_id?: string;
-  course_id?: string;
+  course_ids?: string[];
   statement_text?: string;
   solution_text?: string;
   statement_files?: string[];
@@ -160,6 +160,21 @@ export default function ExoCard({
             <h2 className="font-semibold text-lg">
               {exo.order ? `Exercice ${exo.order} : ` : ""}{exo.title}
             </h2>
+            {exo.course_ids && exo.course_ids.length > 1 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full border border-purple-300">
+                  🔗 {exo.course_ids.length} cours
+                </span>
+                {exo.course_ids.map(courseId => {
+                  const course = courses.find(c => c.id === courseId);
+                  return course ? (
+                    <span key={courseId} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                      {course.title}
+                    </span>
+                  ) : null;
+                })}
+              </div>
+            )}
             {exo.description && <p className="text-gray-600 text-sm mt-1">{exo.description}</p>}
             {exo.difficulty && (
               <span
@@ -196,9 +211,9 @@ export default function ExoCard({
             {subjects.find((s) => s.id === exo.subject_id)?.name}
           </span>
         )}
-        {exo.course_id && (
+        {exo.course_ids && (
           <span className="bg-gray-200 px-2 py-0.5 rounded">
-            {courses.find((c) => c.id === exo.course_id)?.title}
+            {courses.find((c) => c.id === exo.course_ids?.[0])?.title}
           </span>
         )}
       </div>
