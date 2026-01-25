@@ -1,10 +1,11 @@
+// front/src/components/CourseSection.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, limit, getCountFromServer } from "firebase/firestore";
 import { db, auth } from "@/firebase";
 import CourseCard from "@/components/course/CourseCard";
-import { mapCourseWithNames } from "@/utils/mapCourse";
+import { loadLevelsAndSubjects, mapCourseWithNamesSync } from "@/utils/mapCourse";
 import Link from "next/link";
 import { FaFire, FaArrowRight, FaSpinner } from "react-icons/fa";
 
@@ -21,10 +22,10 @@ interface CourseWithStatus {
 
 export default function CourseSection() {
   const [courses, setCourses] = useState<CourseWithStatus[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Couleurs du logo
   const colors = {
     green: "#2C5F4D",
     greenLight: "#E8F5E9",
@@ -43,49 +44,50 @@ export default function CourseSection() {
   useEffect(() => {
     async function fetchCourses() {
       try {
-        const snap = await getDocs(collection(db, "courses"));
-        const baseCourses = snap.docs.slice(0, 10).map((doc) => ({ id: doc.id, ...doc.data() }));
+        // ⚡ OPTIMISATION 1 : Charger levels et subjects UNE FOIS (2 requêtes)
+        const { levelsCache, subjectsCache } = await loadLevelsAndSubjects();
 
-        const enriched: CourseWithStatus[] = [];
+        // ⚡ OPTIMISATION 2 : Compter et charger 3 cours (2 requêtes)
+        const [countSnapshot, coursesSnap] = await Promise.all([
+          getCountFromServer(collection(db, "courses")),
+          getDocs(query(collection(db, "courses"), limit(3)))
+        ]);
 
-        for (const c of baseCourses) {
-          const mapped = await mapCourseWithNames(c.id, c);
+        const total = countSnapshot.data().count;
+        setTotalCount(total);
 
-          let enrolled = false;
-          let progressStatus: "not_started" | "in_progress" | "done" = "not_started";
+        const baseCourses = coursesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-          if (userId) {
-            const qEnroll = query(
-              collection(db, "enrollments"),
-              where("id_user", "==", userId),
-              where("id_course", "==", c.id)
-            );
-            const enrollSnap = await getDocs(qEnroll);
-            enrolled = !enrollSnap.empty;
+        // ⚡ OPTIMISATION 3 : Batch loading enrollments et progress (2 requêtes si connecté)
+        let enrollmentsMap = new Map<string, boolean>();
+        let progressMap = new Map<string, "not_started" | "in_progress" | "done">();
 
-            const qProgress = query(
-              collection(db, "progress"),
-              where("id_user", "==", userId),
-              where("id_course", "==", c.id)
-            );
-            const progressSnap = await getDocs(qProgress);
-            if (!progressSnap.empty) {
-              const data = progressSnap.docs[0].data();
-              progressStatus = (data.status as "not_started" | "in_progress" | "done") || "not_started";
-            }
-          }
+        if (userId) {
+          const [enrollSnap, progressSnap] = await Promise.all([
+            getDocs(query(collection(db, "enrollments"), where("id_user", "==", userId))),
+            getDocs(query(collection(db, "progress"), where("id_user", "==", userId)))
+          ]);
 
-          enriched.push({
-            id: mapped.id,
-            titre: mapped.titre,
-            description: mapped.description,
-            niveau: mapped.niveau,
-            matiere: mapped.matiere,
-            img: mapped.img,
-            enrolled,
-            progressStatus,
+          enrollSnap.docs.forEach(doc => {
+            enrollmentsMap.set(doc.data().id_course, true);
+          });
+
+          progressSnap.docs.forEach(doc => {
+            const data = doc.data();
+            progressMap.set(data.id_course, data.status || "not_started");
           });
         }
+
+        // ⚡ OPTIMISATION 4 : Mapping SANS requêtes supplémentaires (0 requêtes)
+        const enriched: CourseWithStatus[] = baseCourses.map(c => {
+          const mapped = mapCourseWithNamesSync(c.id, c, levelsCache, subjectsCache);
+
+          return {
+            ...mapped,
+            enrolled: enrollmentsMap.has(c.id),
+            progressStatus: progressMap.get(c.id) || "not_started",
+          };
+        });
 
         setCourses(enriched);
       } catch (err) {
@@ -98,12 +100,11 @@ export default function CourseSection() {
     fetchCourses();
   }, [userId]);
 
-  const visibleCourses = courses.slice(0, 3);
-  const remaining = courses.length - 3;
+  const remaining = totalCount - 3;
 
   if (loading) {
     return (
-      <section className="py-16 px-4 bg-gray-50">
+      <section className="py-16 px-6 bg-gray-50">
         <div className="max-w-7xl mx-auto text-center">
           <FaSpinner className="animate-spin text-5xl mx-auto mb-4" style={{ color: colors.navy }} />
           <p className="text-lg text-gray-600">Chargement des cours...</p>
@@ -113,13 +114,13 @@ export default function CourseSection() {
   }
 
   return (
-    <section className="py-16 md:py-20 px-4 bg-gray-50">
+    <section className="py-20 px-6 bg-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <FaFire className="text-3xl md:text-4xl text-orange-500" />
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900">
+            <FaFire className="text-4xl text-orange-500" />
+            <h2 className="text-4xl lg:text-5xl font-extrabold text-gray-900">
               Cours populaires
             </h2>
           </div>
@@ -129,8 +130,8 @@ export default function CourseSection() {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-          {visibleCourses.map((course) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {courses.map((course) => (
             <div key={course.id} className="transform hover:scale-105 transition-transform duration-300">
               <CourseCard course={course} />
             </div>
