@@ -1,4 +1,4 @@
-import "./globals.css"; // CSS global avec Tailwind
+import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { MathJaxContext } from "better-react-mathjax";
@@ -8,7 +8,7 @@ export const metadata = {
   title: "Rosaine Academy",
   description: "Apprenez à votre rythme avec Rosaine Academy",
   icons: {
-    icon: "/logo.png", // Favicon principal
+    icon: "/logo.png",
     shortcut: "/logo.png",
     apple: "/logo.png",
   },
@@ -22,15 +22,13 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
-        {/* Favicon principal */}
         <link rel="icon" href="/logo.jpg" sizes="any" />
         <link rel="icon" type="image/jpeg" href="/logo.jpg" />
-        {/* Icône Apple (iPhone/iPad) */}
         <link rel="apple-touch-icon" href="/logo.jpg" />
       </head>
       <body className="flex flex-col min-h-screen font-sans">
         <Header />
-        <main className="flex-grow container mx-auto px-4 py-6">
+        <main className="flex-grow">
           <MathJaxContext version={3} config={mathJaxConfig}>
             {children}
           </MathJaxContext>
