@@ -1,3 +1,4 @@
+// front/src/app/mycourses/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,7 +13,7 @@ import {
   getDoc,
   deleteDoc,
 } from "firebase/firestore";
-import { mapCourseWithNames, Course } from "@/utils/mapCourse";
+import { loadLevelsAndSubjects, mapCourseWithNamesSync, Course } from "@/utils/mapCourse";
 import CourseCard from "@/components/course/CourseCard";
 import AlertModal from "@/components/ui/AlertModal";
 import { FaSpinner } from "react-icons/fa";
@@ -40,41 +41,59 @@ export default function MyCoursesPage() {
       setUserId(user.uid);
 
       try {
+        // ⚡ OPTIMISATION 1 : Charger levels et subjects UNE FOIS (2 requêtes)
+        const { levelsCache, subjectsCache } = await loadLevelsAndSubjects();
+
+        // ⚡ OPTIMISATION 2 : Charger tous les enrollments de l'utilisateur (1 requête)
         const enrollSnap = await getDocs(
           query(collection(db, "enrollments"), where("id_user", "==", user.uid))
         );
-        const enrollments = enrollSnap.docs.map(
-          (doc) => doc.data() as { id_course: string }
+
+        const enrollments = enrollSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as { id: string; id_course: string }));
+
+        if (enrollments.length === 0) {
+          setCourses([]);
+          setLoading(false);
+          return;
+        }
+
+        // ⚡ OPTIMISATION 3 : Charger tous les progress (1 requête)
+        const progressSnap = await getDocs(
+          query(collection(db, "progress"), where("id_user", "==", user.uid))
         );
 
+        const progressMap = new Map<string, "not_started" | "in_progress" | "done">();
+        progressSnap.docs.forEach(doc => {
+          const data = doc.data();
+          progressMap.set(data.id_course, data.status || "not_started");
+        });
+
+        // ⚡ OPTIMISATION 4 : Charger les cours en parallèle
         const courseList: CourseWithStatus[] = [];
 
-        for (const enr of enrollments) {
-          const docSnap = await getDoc(doc(db, "courses", enr.id_course));
-          if (!docSnap.exists()) continue;
+        await Promise.all(
+          enrollments.map(async (enr) => {
+            const docSnap = await getDoc(doc(db, "courses", enr.id_course));
+            if (!docSnap.exists()) return;
 
-          const mapped = await mapCourseWithNames(docSnap.id, docSnap.data());
+            // ⚡ Mapping SANS requêtes supplémentaires
+            const mapped = mapCourseWithNamesSync(
+              docSnap.id,
+              docSnap.data(),
+              levelsCache,
+              subjectsCache
+            );
 
-          const qProgress = query(
-            collection(db, "progress"),
-            where("id_user", "==", user.uid),
-            where("id_course", "==", docSnap.id)
-          );
-          const progressSnap = await getDocs(qProgress);
-
-          let progressStatus: "not_started" | "in_progress" | "done" =
-            "not_started";
-          if (!progressSnap.empty) {
-            const data = progressSnap.docs[0].data();
-            progressStatus = data.status || "not_started";
-          }
-
-          courseList.push({
-            ...mapped,
-            enrolled: true,
-            progressStatus,
-          });
-        }
+            courseList.push({
+              ...mapped,
+              enrolled: true,
+              progressStatus: progressMap.get(docSnap.id) || "not_started",
+            });
+          })
+        );
 
         const uniqueCourses = Array.from(
           new Map(courseList.map((c) => [c.id, c])).values()
@@ -98,6 +117,7 @@ export default function MyCoursesPage() {
   }, []);
 
   const handleUnenrollClick = (courseId: string) => setAlertCourseId(courseId);
+
   const handleConfirmUnenroll = async () => {
     if (!alertCourseId || !userId) return;
 
@@ -127,6 +147,7 @@ export default function MyCoursesPage() {
       setAlertCourseId(null);
     }
   };
+
   const handleCancelUnenroll = () => setAlertCourseId(null);
 
   if (loading) return <LoadingHero />;
@@ -165,14 +186,12 @@ export default function MyCoursesPage() {
                   {matiere}
                 </h3>
 
-                {/* grid centrée */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 justify-items-center">
                   {coursList.map((course, idx) => (
                     <div
                       key={`${course.id}-${idx}`}
                       className="justify-self-center"
                     >
-                      {/* carte + bouton */}
                       <div className="inline-flex flex-col max-w-sm transition hover:scale-105 duration-200 shadow-lg rounded-2xl bg-white">
                         <CourseCard
                           course={course}
@@ -206,10 +225,6 @@ export default function MyCoursesPage() {
   );
 }
 
-// ---------------------------
-// Composants secondaires
-// ---------------------------
-
 function LoadingHero() {
   return (
     <div className="bg-gradient-to-r from-[#0D1B2A] to-[#1B9AAA] min-h-screen flex flex-col justify-center items-center text-white text-center px-6">
@@ -242,7 +257,7 @@ function NoCoursesHero() {
     <div className="max-w-5xl mx-auto py-20 px-6 text-center">
       <h1 className="text-4xl font-bold mb-4 text-[#0D1B2A]">Mes cours</h1>
       <p className="text-gray-700">
-        Vous n'êtes inscrit à aucun cours pour l’instant.
+        Vous n'êtes inscrit à aucun cours pour l'instant.
       </p>
     </div>
   );
