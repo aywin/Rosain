@@ -1,3 +1,4 @@
+// front/src/app/courses/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,7 +11,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "@/firebase";
-import { mapCourseWithNames } from "@/utils/mapCourse";
+import { loadLevelsAndSubjects, mapCourseWithNamesSync } from "@/utils/mapCourse";
 import CourseCard from "@/components/course/CourseCard";
 import {
   FaChevronDown,
@@ -38,7 +39,6 @@ export default function CoursesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [showMore, setShowMore] = useState<Record<string, boolean>>({});
 
-  // Couleurs du logo et thème
   const colors = {
     green: "#2C5F4D",
     greenLight: "#E8F5E9",
@@ -57,49 +57,44 @@ export default function CoursesPage() {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const snap = await getDocs(collection(db, "courses"));
-        const coursesData: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // ⚡ OPTIMISATION 1 : Charger levels et subjects UNE FOIS (2 requêtes)
+        const { levelsCache, subjectsCache } = await loadLevelsAndSubjects();
 
-        const enriched: CourseWithStatus[] = [];
+        // ⚡ OPTIMISATION 2 : Charger TOUS les cours en une fois (1 requête)
+        const coursesSnap = await getDocs(collection(db, "courses"));
+        const coursesData: any[] = coursesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-        for (const c of coursesData) {
-          const mapped = await mapCourseWithNames(c.id, c);
+        // ⚡ OPTIMISATION 3 : Charger TOUS les enrollments et progress de l'utilisateur (2 requêtes)
+        let enrollmentsMap = new Map<string, boolean>();
+        let progressMap = new Map<string, "not_started" | "in_progress" | "done">();
 
-          let enrolled = false;
-          let progressStatus: "not_started" | "in_progress" | "done" = "not_started";
+        if (userId) {
+          const [enrollSnap, progressSnap] = await Promise.all([
+            getDocs(query(collection(db, "enrollments"), where("id_user", "==", userId))),
+            getDocs(query(collection(db, "progress"), where("id_user", "==", userId)))
+          ]);
 
-          if (userId) {
-            const qEnroll = query(
-              collection(db, "enrollments"),
-              where("id_user", "==", userId),
-              where("id_course", "==", c.id)
-            );
-            const enrollSnap = await getDocs(qEnroll);
-            enrolled = !enrollSnap.empty;
+          enrollSnap.docs.forEach(doc => {
+            enrollmentsMap.set(doc.data().id_course, true);
+          });
 
-            const qProgress = query(
-              collection(db, "progress"),
-              where("id_user", "==", userId),
-              where("id_course", "==", c.id)
-            );
-            const progressSnap = await getDocs(qProgress);
-            if (!progressSnap.empty) {
-              progressStatus = progressSnap.docs[0].data().status || "not_started";
-            }
-          }
-
-          enriched.push({
-            id: mapped.id,
-            titre: mapped.titre,
-            description: mapped.description,
-            niveau: mapped.niveau,
-            matiere: mapped.matiere,
-            img: mapped.img,
-            order: c.order || 0,
-            enrolled,
-            progressStatus,
+          progressSnap.docs.forEach(doc => {
+            const data = doc.data();
+            progressMap.set(data.id_course, data.status || "not_started");
           });
         }
+
+        // ⚡ OPTIMISATION 4 : Mapper les cours SANS requêtes supplémentaires (0 requêtes)
+        const enriched: CourseWithStatus[] = coursesData.map(c => {
+          const mapped = mapCourseWithNamesSync(c.id, c, levelsCache, subjectsCache);
+
+          return {
+            ...mapped,
+            order: c.order || 0,
+            enrolled: enrollmentsMap.has(c.id),
+            progressStatus: progressMap.get(c.id) || "not_started",
+          };
+        });
 
         enriched.sort((a, b) => {
           if (a.niveau !== b.niveau) return a.niveau.localeCompare(b.niveau);
