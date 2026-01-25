@@ -1,3 +1,4 @@
+// front/src/components/course/CourseCard.tsx 
 "use client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -57,22 +58,18 @@ export default function CourseCard({ course, onEnroll }: Props) {
   };
 
   const defaultImgUrl =
-    "https://myschool-maroc.com/wp-content/uploads/2023/11/medium-shot-boy-portrait-with-graduation-background-768x748.jpg";
+    "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600";
 
   const isFree = freeCourseIds.includes(course.id);
 
-  // Couleurs du logo : vert foncé #2C5F4D
   const colors = {
     green: "#2C5F4D",
     greenLight: "#E8F5E9",
     greenText: "#1e4d3c",
     navy: "#00205B",
     navyLight: "#E3F2FD",
-    gray: "#546E7A",
-    grayLight: "#F5F5F5",
   };
 
-  // Configuration selon le statut
   let config = {
     buttonLabel: isFree ? "Accès libre" : "S'inscrire",
     buttonIcon: isFree ? <FaUnlock /> : <FaLock />,
@@ -126,12 +123,12 @@ export default function CourseCard({ course, onEnroll }: Props) {
   }
 
   return (
-    <div className={`group ${config.cardBg} border-2 ${config.cardBorder} rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}>
-      <div className="relative p-4 md:p-5 flex flex-col h-full">
+    <div className={`group ${config.cardBg} border-2 ${config.cardBorder} rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden h-full`}>
+      <div className="relative p-5 flex flex-col h-full">
         {/* Badge statut */}
         <div className="absolute top-3 right-3 z-10">
           <span
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full shadow-sm backdrop-blur-sm"
             style={{ backgroundColor: config.badge.bg, color: config.badge.color }}
           >
             {config.badge.icon}
@@ -141,27 +138,27 @@ export default function CourseCard({ course, onEnroll }: Props) {
 
         {/* Image */}
         <div className="relative mb-4">
-          <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm group-hover:shadow-md transition-shadow duration-300">
+          <div className="aspect-[4/3] rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm group-hover:shadow-md transition-shadow duration-300">
             <img
               src={course.img && course.img.trim() !== "" ? course.img : defaultImgUrl}
               alt={course.titre}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
           </div>
         </div>
 
         {/* Titre */}
-        <h3 className="text-base md:text-lg font-bold text-gray-800 mb-3 line-clamp-2 min-h-[3rem]">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 line-clamp-2 min-h-[3.5rem] leading-tight">
           {course.titre}
         </h3>
 
         {/* Actions */}
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto space-y-2.5">
           {/* Bouton principal */}
           <button
             onClick={handleMainButton}
-            className="w-full text-white py-3 px-4 rounded-lg font-semibold text-sm md:text-base flex items-center justify-center gap-2 shadow-sm hover:shadow-md active:scale-95 transition-all duration-200"
+            className="w-full text-white py-3.5 px-4 rounded-lg font-semibold text-base flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95 transition-all duration-200"
             style={{
               backgroundColor: config.buttonBg,
             }}
@@ -179,7 +176,7 @@ export default function CourseCard({ course, onEnroll }: Props) {
             className="block w-full text-center text-sm font-medium hover:underline transition-colors py-1"
             style={{ color: colors.navy }}
           >
-            Voir les détails
+            Voir les détails →
           </Link>
         </div>
       </div>
