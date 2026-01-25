@@ -1,6 +1,8 @@
+// front/src/components/tuto/VideoPlayer.tsx
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import { FaRobot, FaClock } from "react-icons/fa";
 import VideoControls from "./VideoControls";
 import ProgressBar from "./ProgressBar";
 import QuizOverlay, { Quiz } from "./QuizOverlay";
@@ -52,7 +54,6 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
-
   const rafRef = useRef<number | null>(null);
   const onNextRef = useRef(onNext);
   const lastTimeUpdateRef = useRef<number>(0);
@@ -363,14 +364,14 @@ export default function VideoPlayer({
   };
 
   return (
-    <div className="flex flex-col items-center relative w-full max-w-4xl mx-auto">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+    <div className="flex flex-col items-center relative w-full max-w-5xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">{title}</h2>
 
       {error ? (
-        <p className="text-red-500">{error}</p>
+        <p className="text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200">{error}</p>
       ) : (
         <>
-          <div className="relative w-[70%] aspect-video rounded-lg overflow-hidden shadow-lg">
+          <div className="relative w-[70%] aspect-video rounded-xl overflow-hidden shadow-2xl">
             <div ref={containerRef} className="w-full h-full pointer-events-none" />
             <div
               className="absolute inset-0 z-10 cursor-pointer"
@@ -390,16 +391,19 @@ export default function VideoPlayer({
           />
 
           {countdown !== null && (
-            <div className="mt-4 flex items-center justify-between bg-gray-100 p-3 rounded shadow">
-              <p className="text-gray-700">
-                Prochain chapitre dans <span className="font-bold">{countdown}</span> sec...
-              </p>
+            <div className="mt-6 flex items-center justify-between bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg shadow-md border border-blue-200 w-[70%]">
+              <div className="flex items-center gap-3">
+                <FaClock className="text-blue-600 text-xl animate-pulse" />
+                <p className="text-gray-800 font-medium">
+                  Prochain chapitre dans <span className="font-bold text-blue-600">{countdown}</span> sec...
+                </p>
+              </div>
               <button
                 onClick={() => {
                   setCountdown(null);
                   onNextRef.current?.();
                 }}
-                className="ml-4 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold shadow-sm"
               >
                 Passer maintenant →
               </button>
@@ -408,9 +412,10 @@ export default function VideoPlayer({
 
           <button
             onClick={onAssistantClick}
-            className="mt-4 self-end px-3 py-2 border rounded hover:bg-blue-600 hover:text-white transition"
+            className="mt-6 self-end flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition font-semibold shadow-md"
           >
-            Ouvrir Assistant IA →
+            <FaRobot className="text-lg" />
+            <span>Ouvrir Assistant IA</span>
           </button>
 
           <VideoTranscript

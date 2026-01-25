@@ -1,3 +1,4 @@
+// front/src/components/tuto/VideoControlPanel.tsx
 "use client";
 
 import { FC } from "react";
