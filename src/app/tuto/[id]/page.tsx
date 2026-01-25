@@ -12,7 +12,7 @@ import {
   getDoc,
   setDoc,
 } from "firebase/firestore";
-import { mapCourseWithNames } from "@/utils/mapCourse";
+import { mapCourseWithNamesAuto } from "@/utils/mapCourse";
 import { freeCourseIds } from "@/utils/freeCourses";
 
 import Sidebar from "@/components/tuto/Sidebar";
@@ -21,7 +21,6 @@ import VideoPlayer from "@/components/tuto/VideoPlayer";
 import AssistantPanel from "@/components/AssistantPanel";
 import ExoPlayer from "@/components/tuto/ExoPlayer";
 
-// ✅ Interface pour les segments de transcription
 interface TranscriptSegment {
   start: number;
   duration: number;
@@ -49,7 +48,7 @@ type ContentItem =
 export default function TutoPage() {
   const params = useParams<{ id: string }>();
   if (!params?.id)
-    return <div className="p-12 text-[#FF6B6B]">ID manquant</div>;
+    return <div className="p-12 text-red-600">ID manquant</div>;
   const courseId = params.id;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -62,11 +61,10 @@ export default function TutoPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  // ✅ NOUVEAU : États pour les transcriptions et le temps vidéo
   const [transcripts, setTranscripts] = useState<Record<string, TranscriptSegment[]>>({});
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
 
-  // ✅ Vérification d'accès (inscription OU cours libre)
+  // ⚡ Vérification d'accès
   useEffect(() => {
     if (freeCourseIds.includes(courseId)) {
       setAllowed(true);
@@ -98,12 +96,12 @@ export default function TutoPage() {
     return () => unsub();
   }, [courseId]);
 
-  // Charger le cours
+  // ⚡ Charger le cours (optimisé avec cache)
   useEffect(() => {
     getDoc(doc(db, "courses", courseId))
       .then(async (snap) => {
         if (snap.exists()) {
-          const mappedCourse = await mapCourseWithNames(snap.id, snap.data());
+          const mappedCourse = await mapCourseWithNamesAuto(snap.id, snap.data());
           setCourse(mappedCourse);
         } else {
           setCourse(null);
@@ -115,80 +113,80 @@ export default function TutoPage() {
       });
   }, [courseId]);
 
-  // ✅ Charger vidéos + exos + transcriptions
+  // ⚡ Charger vidéos + exos + transcriptions + quizzes (optimisé)
   useEffect(() => {
     const loadContent = async () => {
       try {
-        const videoQuery = query(
-          collection(db, "videos"),
-          where("courseId", "==", courseId)
-        );
-        const videoSnap = await getDocs(videoQuery);
+        // ⚡ Charger vidéos, exos, quizzes et transcripts en parallèle
+        const [videoSnap, exoSnap, quizSnap, transcriptSnap] = await Promise.all([
+          getDocs(query(collection(db, "videos"), where("courseId", "==", courseId))),
+          getDocs(query(collection(db, "app_exercises"), where("courseId", "==", courseId))),
+          getDocs(collection(db, "quizzes")),
+          getDocs(collection(db, "transcripts"))
+        ]);
 
-        const vids: Video[] = await Promise.all(
-          videoSnap.docs.map(async (docSnap) => {
-            const data = docSnap.data();
+        // ⚡ Créer des maps pour lookup rapide
+        const quizzesMap = new Map<string, any[]>();
+        quizSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const videoId = data.videoId;
+          if (!quizzesMap.has(videoId)) {
+            quizzesMap.set(videoId, []);
+          }
+          quizzesMap.get(videoId)!.push({ id: doc.id, ...data });
+        });
 
-            // Charger les quizzes
-            const quizQuery = query(
-              collection(db, "quizzes"),
-              where("videoId", "==", docSnap.id)
-            );
-            const quizSnap = await getDocs(quizQuery);
-            const quizzes = quizSnap.docs.map((q) => ({
-              id: q.id,
-              ...q.data(),
-            }));
+        const transcriptsMap = new Map<string, TranscriptSegment[]>();
+        transcriptSnap.docs.forEach(doc => {
+          const data = doc.data();
+          transcriptsMap.set(doc.id, data.segments || []);
+        });
 
-            // ✅ NOUVEAU : Charger la transcription
-            try {
-              const transcriptDoc = await getDoc(doc(db, "transcripts", docSnap.id));
-              if (transcriptDoc.exists()) {
-                const transcriptData = transcriptDoc.data();
-                setTranscripts(prev => ({
-                  ...prev,
-                  [docSnap.id]: transcriptData.segments || []
-                }));
-              }
-            } catch (error) {
-              console.warn(`Transcription non disponible pour ${docSnap.id}:`, error);
-            }
+        // ⚡ Mapper les vidéos avec leurs quizzes et transcripts
+        const vids: Video[] = videoSnap.docs.map(docSnap => {
+          const data = docSnap.data();
+          const videoId = docSnap.id;
 
-            return {
-              id: docSnap.id,
-              title: data.title,
-              url: data.url,
-              order: data.order ?? 0,
-              quizzes,
-            } as Video;
-          })
-        );
+          // Récupérer quizzes de cette vidéo
+          const quizzes = quizzesMap.get(videoId) || [];
+
+          // Récupérer transcript de cette vidéo
+          const transcript = transcriptsMap.get(videoId);
+          if (transcript) {
+            setTranscripts(prev => ({ ...prev, [videoId]: transcript }));
+          }
+
+          return {
+            id: videoId,
+            title: data.title,
+            url: data.url,
+            order: data.order ?? 0,
+            quizzes,
+          };
+        });
 
         vids.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setVideos(vids);
 
-        const exoQuery = query(
-          collection(db, "app_exercises"),
-          where("courseId", "==", courseId)
-        );
-        const exoSnap = await getDocs(exoQuery);
-        const exos: AppExo[] = exoSnap.docs.map((d) => ({
+        // ⚡ Mapper les exercices
+        const exos: AppExo[] = exoSnap.docs.map(d => ({
           id: d.id,
           ...(d.data() as any),
         }));
         setAppExos(exos);
 
+        // ⚡ Fusionner vidéos et exos
         const merged: ContentItem[] = [];
-        vids.forEach((video) => {
+        vids.forEach(video => {
           merged.push({ type: "video", ...video });
-          const afterExos = exos.filter((e) => e.videoAfter === video.id);
-          afterExos.forEach((exo) => merged.push({ type: "exo", ...exo }));
+          const afterExos = exos.filter(e => e.videoAfter === video.id);
+          afterExos.forEach(exo => merged.push({ type: "exo", ...exo }));
         });
 
         setContent(merged);
         if (merged.length > 0) setCurrent(0);
       } catch (error) {
-        console.error(error);
+        console.error("Erreur chargement contenu:", error);
         setVideos([]);
         setAppExos([]);
         setContent([]);
@@ -204,7 +202,7 @@ export default function TutoPage() {
     videoOrder: number,
     allVideos: Video[]
   ) => {
-    const orders = allVideos.map((v) => v.order ?? 0);
+    const orders = allVideos.map(v => v.order ?? 0);
     const firstOrder = Math.min(...orders);
     const lastOrder = Math.max(...orders);
 
@@ -224,28 +222,27 @@ export default function TutoPage() {
     );
   };
 
-  // Écrans d'attente / erreurs
   if (loading)
     return (
-      <div className="p-12 text-[#1B9AAA] font-semibold text-lg">
+      <div className="p-12 text-blue-600 font-semibold text-lg">
         Chargement…
       </div>
     );
   if (!allowed)
     return (
-      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">
+      <div className="p-12 text-red-600 font-semibold text-lg">
         Accès refusé
       </div>
     );
   if (!course)
     return (
-      <div className="p-12 text-[#FF9F43] font-semibold text-lg">
+      <div className="p-12 text-orange-600 font-semibold text-lg">
         Cours introuvable
       </div>
     );
   if (content.length === 0)
     return (
-      <div className="p-12 text-[#FF6B6B] font-semibold text-lg">
+      <div className="p-12 text-red-600 font-semibold text-lg">
         Aucun contenu
       </div>
     );
@@ -255,33 +252,30 @@ export default function TutoPage() {
   return (
     <div className="flex h-screen w-full overflow-hidden relative">
       {/* Sidebar */}
-      <div
-        className={`${sidebarOpen ? "block" : "hidden"
-          } fixed top-0 left-0 z-30 h-full w-64 bg-[#f7f7f7] shadow-lg lg:static lg:block`}
-      >
-        <Sidebar
-          content={content.map(({ id, title, type }) => ({
-            id,
-            title,
-            type,
-          }))}
-          current={current}
-          setCurrent={(i) => {
-            setCurrent(i);
-            setSidebarOpen(false);
+      <Sidebar
+        content={content.map(({ id, title, type }) => ({
+          id,
+          title,
+          type,
+        }))}
+        current={current}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        setCurrent={(i) => {
+          setCurrent(i);
+          setSidebarOpen(false);
 
-            const item = content[i];
-            if (auth.currentUser && item.type === "video") {
-              updateProgress(
-                auth.currentUser.uid,
-                courseId,
-                (item as Video).order ?? 0,
-                videos
-              );
-            }
-          }}
-        />
-      </div>
+          const item = content[i];
+          if (auth.currentUser && item.type === "video") {
+            updateProgress(
+              auth.currentUser.uid,
+              courseId,
+              (item as Video).order ?? 0,
+              videos
+            );
+          }
+        }}
+      />
 
       {/* Overlay mobile */}
       {sidebarOpen && (
@@ -292,43 +286,40 @@ export default function TutoPage() {
       )}
 
       {/* Contenu principal */}
-      <div className="flex-1 flex flex-col bg-[#E0F7FA] relative overflow-y-auto">
+      <div className="flex-1 flex flex-col bg-gray-50 relative overflow-y-auto">
         <CourseHeader
           titre={course.titre}
           niveau={course.niveau}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          onToggleSidebar={() => setSidebarOpen(v => !v)}
         />
 
         <div className="flex-1 flex flex-col px-4 py-4">
           {currentItem ? (
             currentItem.type === "video" ? (
-              <>
-                <VideoPlayer
-                  url={currentItem.url}
-                  title={currentItem.title}
-                  courseId={courseId}
-                  videoIdFirestore={currentItem.id}
-                  onAssistantClick={() => setShowAssistant(true)}
-                  onNext={() => {
-                    if (current !== null && current + 1 < content.length) {
-                      setCurrent(current + 1);
-                      const next = content[current + 1];
-                      if (auth.currentUser && next.type === "video") {
-                        updateProgress(
-                          auth.currentUser.uid,
-                          courseId,
-                          (next as Video).order ?? 0,
-                          videos
-                        );
-                      }
+              <VideoPlayer
+                url={currentItem.url}
+                title={currentItem.title}
+                courseId={courseId}
+                videoIdFirestore={currentItem.id}
+                onAssistantClick={() => setShowAssistant(true)}
+                onNext={() => {
+                  if (current !== null && current + 1 < content.length) {
+                    setCurrent(current + 1);
+                    const next = content[current + 1];
+                    if (auth.currentUser && next.type === "video") {
+                      updateProgress(
+                        auth.currentUser.uid,
+                        courseId,
+                        (next as Video).order ?? 0,
+                        videos
+                      );
                     }
-                  }}
-                  quizzes={(currentItem as Video).quizzes}
-                  transcript={transcripts[currentItem.id] || []} // ✅ NOUVEAU
-                  onTimeUpdate={setVideoCurrentTime} // ✅ NOUVEAU
-                />
-                {/* ✅ VideoTranscript est maintenant intégré dans VideoPlayer */}
-              </>
+                  }
+                }}
+                quizzes={(currentItem as Video).quizzes}
+                transcript={transcripts[currentItem.id] || []}
+                onTimeUpdate={setVideoCurrentTime}
+              />
             ) : (
               <ExoPlayer
                 exoId={currentItem.id}
@@ -349,14 +340,14 @@ export default function TutoPage() {
               />
             )
           ) : (
-            <div className="text-[#1B1B1B] mt-12 text-lg">
+            <div className="text-gray-800 mt-12 text-lg">
               Veuillez sélectionner un élément.
             </div>
           )}
         </div>
       </div>
 
-      {/* ✅ Assistant avec contexte complet */}
+      {/* Assistant */}
       {showAssistant && (
         <div className="fixed right-0 top-0 h-screen z-50 shadow-2xl">
           <AssistantPanel
