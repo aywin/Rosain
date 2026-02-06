@@ -19,6 +19,7 @@ export const apiConfig = {
         },
         assistant: {
             chat: '/ai_assistant_chat',
+            extractExercise: "/assistant/extract-exercise", // ✨ Nouveau
             exo: '/ai_assistant_exo',
         },
         quota: '/quota', // ✅ Nouveau endpoint

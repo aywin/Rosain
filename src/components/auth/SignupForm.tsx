@@ -4,32 +4,20 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { setDoc, doc } from "firebase/firestore";
-import type { Plan, ServiceLimit, Quota } from "@/type/quota";
-
-// Limites par plan
-const PLAN_LIMITS: Record<Plan, ServiceLimit> = {
-  gratuit: {
-    exo_assistant: 5,
-    video_assistant: 5,
-    image_upload: 3,
-  },
-  eleve: {
-    exo_assistant: 20,
-    video_assistant: 20,
-    image_upload: 10,
-  },
-  famille: {
-    exo_assistant: 50,
-    video_assistant: 50,
-    image_upload: 25,
-  },
-};
-
-const DEFAULT_PLAN: Plan = "gratuit";
-
 
 export default function SignupForm() {
   const router = useRouter();
+
+  // ✅ Plan initial pour les nouveaux utilisateurs
+  const initialPlan = "gratuit";
+
+  // ✅ Limites par défaut (les vraies limites viennent de Firestore backend)
+  const DEFAULT_LIMITS = {
+    gratuit: { exo_assistant: 5, video_assistant: 10, image_upload: 0 },
+    eleve: { exo_assistant: 150, video_assistant: 75, image_upload: 10 },
+    famille: { exo_assistant: 200, video_assistant: 100, image_upload: 20 }
+  };
+
   const [form, setForm] = useState({
     nom: "",
     prenom: "",
@@ -57,15 +45,13 @@ export default function SignupForm() {
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const userId = userCred.user.uid;
 
-
-
       // 1️⃣ Créer le document utilisateur
       await setDoc(doc(db, "users", userId), {
         nom: form.nom,
         prenom: form.prenom,
         email: form.email,
         role: form.role, // eleve, parent, tuteur
-        plan: DEFAULT_PLAN,
+        plan: initialPlan,
         statut_paiement: false,
         id_ecole: null,
         linkedStudents: [], // pour parent/tuteur
@@ -77,8 +63,8 @@ export default function SignupForm() {
       // 2️⃣ Créer le document quota (🆕 NOUVEAU)
       await setDoc(doc(db, "quotas", userId), {
         user_id: userId,
-        plan: DEFAULT_PLAN,
-        daily_limits: PLAN_LIMITS[DEFAULT_PLAN],
+        plan: initialPlan,
+        daily_limits: DEFAULT_LIMITS[initialPlan as keyof typeof DEFAULT_LIMITS],
         usage_today: {
           exo_assistant: 0,
           video_assistant: 0,
@@ -87,7 +73,7 @@ export default function SignupForm() {
         last_reset: new Date(),
         created_at: new Date(),
         updated_at: new Date(),
-      } as Quota);
+      });
 
       console.log("✅ Utilisateur et quota créés avec succès");
       router.push("/");

@@ -1,7 +1,7 @@
-//ExoList.tsx
+// front/src/components/exo/ExoList.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoFilters from "./ExoFilters";
@@ -56,6 +56,13 @@ export default function ExoList() {
   const [openStatementIds, setOpenStatementIds] = useState<Set<string>>(new Set());
   const [openSolutionIds, setOpenSolutionIds] = useState<Set<string>>(new Set());
 
+  const [showAssistant, setShowAssistant] = useState(false);
+  const [currentExoContext, setCurrentExoContext] = useState<any>(null);
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
+
+  const [assistantWidth, setAssistantWidth] = useState(450);
+  const [isResizing, setIsResizing] = useState(false);
+
   const toggleStatement = (exoId: string) => {
     setOpenStatementIds(prev => {
       const copy = new Set(prev);
@@ -71,10 +78,6 @@ export default function ExoList() {
       return copy;
     });
   };
-
-  const [showAssistant, setShowAssistant] = useState(false);
-  const [currentExoContext, setCurrentExoContext] = useState<any>(null);
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,7 +111,7 @@ export default function ExoList() {
         if (firstCourse) {
           setLevelId(terminalLevel.id);
           setSubjectId(mathsSubject.id);
-          setCourseIds(firstCourse ? [firstCourse.id] : []); // ✨ Array
+          setCourseIds(firstCourse ? [firstCourse.id] : []);
         }
       }
 
@@ -140,15 +143,12 @@ export default function ExoList() {
     });
   };
 
-  // Remplace la section selectedExercises (lignes 147-159) par ceci :
-
   const selectedExercises = exos
     .filter(exo => selectedExerciseIds.has(exo.id))
     .map(exo => {
       const level = levels.find(l => l.id === exo.level_id);
       const subject = subjects.find(s => s.id === exo.subject_id);
 
-      // ✨ Récupérer les cours associés pour exercices multi-thématiques
       const exoCourseIds = exo.course_ids || (exo.course_id ? [exo.course_id] : []);
       const exoCourses = courses
         .filter(c => exoCourseIds.includes(c.id))
@@ -164,10 +164,16 @@ export default function ExoList() {
         level: level?.name,
         subject: subject?.name,
         order: exo.order,
-        courses: exoCourses,                      // ✨ Liste des cours
-        isMultiCourse: exoCourseIds.length > 1    // ✨ Flag multi-thématiques
+        courses: exoCourses,
+        isMultiCourse: exoCourseIds.length > 1,
+        source: "platform" as const
       };
     });
+
+  const updateActiveExercises = (exercises: any[]) => {
+    const updatedIds = new Set(exercises.map(ex => ex.id));
+    setSelectedExerciseIds(updatedIds);
+  };
 
   const openGeneralAssistant = () => {
     setCurrentExoContext(null);
@@ -181,23 +187,41 @@ export default function ExoList() {
   const currentLevel = levels.find(l => l.id === levelId);
   const currentSubject = subjects.find(s => s.id === subjectId);
 
-  // ✨ Nouvelle logique de filtrage des exercices
   const filteredExos = exos.filter((e) => {
     const exoCourseIds = e.course_ids || (e.course_id ? [e.course_id] : []);
 
     if (courseIds.length === 0) {
-      // Aucun cours sélectionné = afficher tous les exercices du niveau/matière
       return true;
     }
 
     if (filterMode === "any") {
-      // Mode "Au moins 1" : l'exercice doit avoir au moins un des cours sélectionnés
       return courseIds.some(id => exoCourseIds.includes(id));
     } else {
-      // Mode "Tous" : l'exercice doit avoir TOUS les cours sélectionnés
       return courseIds.every(id => exoCourseIds.includes(id));
     }
   }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  // Gestion du redimensionnement
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = window.innerWidth - e.clientX;
+      setAssistantWidth(Math.max(350, Math.min(800, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   if (loading) {
     return (
@@ -218,12 +242,12 @@ export default function ExoList() {
         courses={filteredCourses}
         levelId={levelId}
         subjectId={subjectId}
-        courseIds={courseIds} // ✨ Changé
+        courseIds={courseIds}
         setLevelId={setLevelId}
         setSubjectId={setSubjectId}
-        setCourseIds={setCourseIds} // ✨ Changé
-        filterMode={filterMode} // ✨ Nouveau
-        setFilterMode={setFilterMode} // ✨ Nouveau
+        setCourseIds={setCourseIds}
+        filterMode={filterMode}
+        setFilterMode={setFilterMode}
       />
 
       {!showAssistant && (
@@ -268,7 +292,6 @@ export default function ExoList() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Affichage par cours (si aucun filtre de cours) */}
             {courseIds.length === 0 ? (
               filteredCourses.map((course) => {
                 const courseExos = filteredExos.filter((e) => {
@@ -307,7 +330,6 @@ export default function ExoList() {
                 );
               })
             ) : (
-              // Affichage direct (avec filtres de cours)
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold text-gray-800">
@@ -346,8 +368,20 @@ export default function ExoList() {
         )}
       </div>
 
+      {/* Desktop assistant avec resize */}
       {showAssistant && (
-        <div className="hidden md:block fixed right-0 top-0 w-[450px] max-w-full h-full bg-white shadow-2xl z-50 border-l">
+        <div
+          className="hidden md:block fixed right-0 top-0 h-full bg-white shadow-2xl z-50 border-l"
+          style={{ width: `${assistantWidth}px` }}
+        >
+          {/* Barre de resize */}
+          <div
+            className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-green-500 transition-colors group z-10"
+            onMouseDown={() => setIsResizing(true)}
+          >
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-20 bg-gray-300 group-hover:bg-green-500 rounded-r transition-colors" />
+          </div>
+
           <ExoAssistantPanel
             onClose={() => {
               setShowAssistant(false);
@@ -357,10 +391,12 @@ export default function ExoList() {
             userLevel={currentLevel?.name}
             userSubject={currentSubject?.name}
             activeExercises={selectedExercises}
+            onExercisesChange={updateActiveExercises}
           />
         </div>
       )}
 
+      {/* Mobile assistant */}
       {showAssistant && (
         <div className="md:hidden fixed inset-0 bg-white z-50 flex flex-col">
           <div className="bg-green-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
@@ -389,6 +425,7 @@ export default function ExoList() {
               userLevel={currentLevel?.name}
               userSubject={currentSubject?.name}
               activeExercises={selectedExercises}
+              onExercisesChange={updateActiveExercises}
             />
           </div>
         </div>

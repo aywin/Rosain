@@ -1,3 +1,4 @@
+// src/components/admin/utils/mathjaxConfig.ts
 export const mathJaxConfig = {
   loader: {
     load: [
