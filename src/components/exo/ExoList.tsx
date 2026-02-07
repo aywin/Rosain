@@ -1,10 +1,11 @@
 // front/src/components/exo/ExoList.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
-import ExoFilters from "./ExoFilters";
+import ExoSidebar from "./ExoSidebar";
+import ExoMobileFilters from "./ExoMobileFilters";
 import ExoCard from "./ExoCard";
 import ExoAssistantPanel from "./ExoAssistantPanel";
 import { FaSpinner, FaRobot, FaTimes } from "react-icons/fa";
@@ -235,82 +236,144 @@ export default function ExoList() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <ExoFilters
-        levels={levels}
-        subjects={subjects}
-        courses={filteredCourses}
-        levelId={levelId}
-        subjectId={subjectId}
-        courseIds={courseIds}
-        setLevelId={setLevelId}
-        setSubjectId={setSubjectId}
-        setCourseIds={setCourseIds}
-        filterMode={filterMode}
-        setFilterMode={setFilterMode}
-      />
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar Desktop */}
+      <div className="hidden md:block">
+        <ExoSidebar
+          levels={levels}
+          subjects={subjects}
+          courses={filteredCourses}
+          levelId={levelId}
+          subjectId={subjectId}
+          courseIds={courseIds}
+          setLevelId={setLevelId}
+          setSubjectId={setSubjectId}
+          setCourseIds={setCourseIds}
+          filterMode={filterMode}
+          setFilterMode={setFilterMode}
+          exerciseCount={filteredExos.length}
+        />
+      </div>
 
-      {!showAssistant && (
-        <button
-          onClick={openGeneralAssistant}
-          className="hidden md:flex fixed bottom-8 right-8 bg-green-600 hover:bg-green-700 text-white rounded-full p-4 shadow-2xl transition-all duration-300 hover:scale-110 z-40 items-center gap-3"
-          title="Ouvrir l'assistant IA"
-        >
-          <FaRobot className="text-2xl" />
-          <span className="font-semibold">Assistant IA</span>
-          {selectedExerciseIds.size > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-7 h-7 rounded-full flex items-center justify-center font-bold shadow-lg">
-              {selectedExerciseIds.size}
-            </span>
-          )}
-        </button>
-      )}
+      {/* Contenu principal */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Mobile: modal filtres */}
+        <div className="md:hidden">
+          <ExoMobileFilters
+            levels={levels}
+            subjects={subjects}
+            courses={filteredCourses}
+            levelId={levelId}
+            subjectId={subjectId}
+            courseIds={courseIds}
+            setLevelId={setLevelId}
+            setSubjectId={setSubjectId}
+            setCourseIds={setCourseIds}
+            filterMode={filterMode}
+            setFilterMode={setFilterMode}
+            exerciseCount={filteredExos.length}
+          />
+        </div>
 
-      {!showAssistant && (
-        <button
-          onClick={openGeneralAssistant}
-          className="md:hidden fixed bottom-4 right-4 bg-green-600 hover:bg-green-700 text-white rounded-full w-14 h-14 shadow-2xl transition-all duration-300 active:scale-95 z-40 flex items-center justify-center"
-          title="Assistant IA"
-        >
-          <FaRobot className="text-xl" />
-          {selectedExerciseIds.size > 0 && (
-            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow-lg">
-              {selectedExerciseIds.size}
-            </span>
-          )}
-        </button>
-      )}
+        {/* Bouton assistant flottant desktop */}
+        {!showAssistant && (
+          <button
+            onClick={openGeneralAssistant}
+            className="hidden md:flex fixed bottom-8 right-8 bg-green-600 hover:bg-green-700 text-white rounded-full p-4 shadow-2xl transition-all duration-300 hover:scale-110 z-40 items-center gap-3"
+            title="Ouvrir l'assistant IA"
+          >
+            <FaRobot className="text-2xl" />
+            <span className="font-semibold">Assistant IA</span>
+            {selectedExerciseIds.size > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-7 h-7 rounded-full flex items-center justify-center font-bold shadow-lg">
+                {selectedExerciseIds.size}
+              </span>
+            )}
+          </button>
+        )}
 
-      <div className="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-8 pb-20 md:pb-8">
-        {filteredExos.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-gray-500 text-base md:text-lg">
-              {courseIds.length > 1 && filterMode === "all"
-                ? "Aucun exercice ne combine tous ces cours"
-                : "Aucun exercice trouvé pour cette sélection"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {courseIds.length === 0 ? (
-              filteredCourses.map((course) => {
-                const courseExos = filteredExos.filter((e) => {
-                  const exoCourseIds = e.course_ids || (e.course_id ? [e.course_id] : []);
-                  return exoCourseIds.includes(course.id);
-                });
+        {/* Bouton assistant flottant mobile */}
+        {!showAssistant && (
+          <button
+            onClick={openGeneralAssistant}
+            className="md:hidden fixed bottom-4 right-4 bg-green-600 hover:bg-green-700 text-white rounded-full w-14 h-14 shadow-2xl transition-all duration-300 active:scale-95 z-40 flex items-center justify-center"
+            title="Assistant IA"
+          >
+            <FaRobot className="text-xl" />
+            {selectedExerciseIds.size > 0 && (
+              <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow-lg">
+                {selectedExerciseIds.size}
+              </span>
+            )}
+          </button>
+        )}
 
-                if (courseExos.length === 0) return null;
+        {/* Liste des exercices */}
+        <div className="max-w-4xl mx-auto px-3 md:px-4 py-4 md:py-8 pb-20 md:pb-8">
+          {filteredExos.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-gray-500 text-base md:text-lg">
+                {courseIds.length > 1 && filterMode === "all"
+                  ? "Aucun exercice ne combine tous ces cours"
+                  : "Aucun exercice trouvé pour cette sélection"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {courseIds.length === 0 ? (
+                filteredCourses.map((course) => {
+                  const courseExos = filteredExos.filter((e) => {
+                    const exoCourseIds = e.course_ids || (e.course_id ? [e.course_id] : []);
+                    return exoCourseIds.includes(course.id);
+                  });
 
-                return (
-                  <div key={course.id} className="space-y-4">
-                    <h3 className="text-xl font-bold text-gray-800 border-b-2 border-blue-500 pb-2 flex items-center justify-between">
-                      <span>{course.title}</span>
-                      <span className="text-sm font-normal text-gray-500">
-                        {courseExos.length} exercice{courseExos.length > 1 ? 's' : ''}
-                      </span>
+                  if (courseExos.length === 0) return null;
+
+                  return (
+                    <div key={course.id} className="space-y-4">
+                      <h3 className="text-xl font-bold text-gray-800 border-b-2 border-blue-500 pb-2 flex items-center justify-between">
+                        <span>{course.title}</span>
+                        <span className="text-sm font-normal text-gray-500">
+                          {courseExos.length} exercice{courseExos.length > 1 ? 's' : ''}
+                        </span>
+                      </h3>
+
+                      {courseExos.map((exo) => (
+                        <ExoCard
+                          key={exo.id}
+                          exo={exo}
+                          levels={levels}
+                          subjects={subjects}
+                          courses={courses}
+                          openStatementIds={openStatementIds}
+                          openSolutionIds={openSolutionIds}
+                          toggleStatement={toggleStatement}
+                          toggleSolution={toggleSolution}
+                          onAssistantClick={handleAssistantClick}
+                          isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
+                          onToggleSelection={toggleExerciseSelection}
+                        />
+                      ))}
+                    </div>
+                  );
+                })
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-800">
+                      {filterMode === "all" && courseIds.length > 1
+                        ? `Exercices combinant ${courseIds.length} cours`
+                        : `${filteredExos.length} exercice${filteredExos.length > 1 ? 's' : ''} trouvé${filteredExos.length > 1 ? 's' : ''}`}
                     </h3>
+                    {filterMode === "all" && courseIds.length > 1 && (
+                      <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+                        🔗 Multi-thématiques
+                      </span>
+                    )}
+                  </div>
 
-                    {courseExos.map((exo) => (
+                  <div className="space-y-4">
+                    {filteredExos.map((exo) => (
                       <ExoCard
                         key={exo.id}
                         exo={exo}
@@ -327,45 +390,11 @@ export default function ExoList() {
                       />
                     ))}
                   </div>
-                );
-              })
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-800">
-                    {filterMode === "all" && courseIds.length > 1
-                      ? `Exercices combinant ${courseIds.length} cours`
-                      : `${filteredExos.length} exercice${filteredExos.length > 1 ? 's' : ''} trouvé${filteredExos.length > 1 ? 's' : ''}`}
-                  </h3>
-                  {filterMode === "all" && courseIds.length > 1 && (
-                    <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
-                      🔗 Multi-thématiques
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  {filteredExos.map((exo) => (
-                    <ExoCard
-                      key={exo.id}
-                      exo={exo}
-                      levels={levels}
-                      subjects={subjects}
-                      courses={courses}
-                      openStatementIds={openStatementIds}
-                      openSolutionIds={openSolutionIds}
-                      toggleStatement={toggleStatement}
-                      toggleSolution={toggleSolution}
-                      onAssistantClick={handleAssistantClick}
-                      isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
-                      onToggleSelection={toggleExerciseSelection}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Desktop assistant avec resize */}
