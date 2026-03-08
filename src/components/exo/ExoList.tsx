@@ -1,14 +1,13 @@
-// src/components/exo/ExoList.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoSidebar from "./ExoSidebar";
+import ExoMobileDrawer from "./ExoMobileDrawer";
 import ExoCard from "./ExoCard";
 import ExoAssistantPanel from "./ExoAssistantPanel";
 import { FaSpinner, FaRobot, FaTimes } from "react-icons/fa";
-import { FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface Level { id: string; name: string; }
@@ -164,7 +163,7 @@ export default function ExoList() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
 
-      {/* ── Sidebar desktop — sticky, hauteur écran ── */}
+      {/* ── Sidebar desktop ── */}
       <div className="hidden md:flex flex-col h-full">
         <ExoSidebar
           levels={levels}
@@ -185,19 +184,21 @@ export default function ExoList() {
       {/* ── Contenu principal scrollable ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* Barre mobile (inchangée) */}
-        <div className="md:hidden bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-          <span className="font-semibold text-gray-800">Exercices</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/pdf")}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium"
-            >
-              <FileText size={13} />
-              PDF
-            </button>
-          </div>
-        </div>
+        {/* ── Drawer mobile (remplace la barre mobile précédente) ── */}
+        <ExoMobileDrawer
+          levels={levels}
+          subjects={subjects}
+          courses={filteredCourses}
+          levelId={levelId}
+          subjectId={subjectId}
+          courseIds={courseIds}
+          setLevelId={setLevelId}
+          setSubjectId={setSubjectId}
+          setCourseIds={setCourseIds}
+          filterMode={filterMode}
+          setFilterMode={setFilterMode}
+          exerciseCount={filteredExos.length}
+        />
 
         {/* Liste exercices */}
         <div className="max-w-4xl mx-auto px-3 md:px-6 py-6 pb-24">
@@ -274,7 +275,7 @@ export default function ExoList() {
         </div>
       </div>
 
-      {/* ── Bouton assistant flottant (desktop) ── */}
+      {/* ── Bouton assistant flottant desktop ── */}
       {!showAssistant && (
         <button
           onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
@@ -290,7 +291,7 @@ export default function ExoList() {
         </button>
       )}
 
-      {/* ── Bouton assistant flottant (mobile) ── */}
+      {/* ── Bouton assistant flottant mobile ── */}
       {!showAssistant && (
         <button
           onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}

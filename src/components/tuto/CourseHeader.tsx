@@ -1,4 +1,3 @@
-// front/src/components/tuto/CourseHeader.tsx
 import { FaBars, FaGraduationCap, FaBook } from "react-icons/fa";
 
 interface CourseHeaderProps {
@@ -9,32 +8,38 @@ interface CourseHeaderProps {
 
 export default function CourseHeader({ titre, niveau, onToggleSidebar }: CourseHeaderProps) {
   return (
-    <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
-      <div className="flex items-center justify-between px-4 py-4">
+    <header className="bg-teal-700 text-white shadow-md flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+
         {/* Bouton menu mobile */}
         <button
           onClick={onToggleSidebar}
-          className="lg:hidden p-2 hover:bg-blue-500 rounded-lg transition"
+          className="lg:hidden p-2 hover:bg-teal-600 transition flex-shrink-0"
+          style={{ borderRadius: 0 }}
           aria-label="Menu"
         >
-          <FaBars className="w-6 h-6" />
+          <FaBars className="w-5 h-5" />
         </button>
 
-        {/* Titre et niveau */}
-        <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:gap-4">
-          <div className="flex items-center gap-2">
-            <FaBook className="w-5 h-5" />
-            <h1 className="text-lg md:text-xl lg:text-2xl font-bold line-clamp-1">
-              {titre}
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 mt-1 lg:mt-0">
-            <FaGraduationCap className="w-4 h-4 text-blue-200" />
-            <span className="text-sm lg:text-base text-blue-100 font-medium">
-              {niveau}
-            </span>
+        {/* Icône livre */}
+        <div
+          className="hidden lg:flex w-9 h-9 bg-teal-600 items-center justify-center flex-shrink-0"
+          style={{ borderRadius: 0 }}
+        >
+          <FaBook className="w-4 h-4 text-white" />
+        </div>
+
+        {/* Titre */}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-base md:text-lg font-bold leading-tight line-clamp-1 text-white">
+            {titre}
+          </h1>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <FaGraduationCap className="w-3.5 h-3.5 text-teal-200 flex-shrink-0" />
+            <span className="text-xs text-teal-100 font-medium">{niveau}</span>
           </div>
         </div>
+
       </div>
     </header>
   );

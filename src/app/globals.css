@@ -56,17 +56,20 @@
   --radius: 0.625rem;
 
   --background: oklch(1 0 0);
-  --foreground: oklch(25% 0.02 250); /* gris foncé lisible */
+  --foreground: oklch(25% 0.02 250);
+  /* gris foncé lisible */
 
   --card: var(--background);
   --card-foreground: var(--foreground);
   --popover: var(--background);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(85% 0.12 350); /* rose pastel doux */
+  --primary: oklch(85% 0.12 350);
+  /* rose pastel doux */
   --primary-foreground: oklch(25% 0.02 250);
 
-  --secondary: oklch(97% 0.04 350); /* rose très pâle */
+  --secondary: oklch(97% 0.04 350);
+  /* rose très pâle */
   --secondary-foreground: var(--primary);
 
   --muted: oklch(94% 0.03 345);
@@ -75,7 +78,8 @@
   --accent: var(--secondary);
   --accent-foreground: var(--primary);
 
-  --destructive: oklch(60% 0.18 25); /* rouge doux */
+  --destructive: oklch(60% 0.18 25);
+  /* rouge doux */
 
   --border: oklch(92% 0.01 345);
   --input: var(--border);
@@ -104,7 +108,8 @@
   --popover: var(--primary);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(60% 0.14 350); /* rose un peu plus vif en dark */
+  --primary: oklch(60% 0.14 350);
+  /* rose un peu plus vif en dark */
   --primary-foreground: oklch(97% 0.01 270);
 
   --secondary: oklch(35% 0.08 350);
@@ -140,6 +145,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -147,9 +153,11 @@
 
 
 .katex-display {
-  margin: 0.25em 0 !important; /* réduit l’espace vertical */
+  margin: 0.25em 0 !important;
+  /* réduit l’espace vertical */
 }
 
 .katex {
-  font-size: 1.05em; /* léger boost de lisibilité */
+  font-size: 1.05em;
+  /* léger boost de lisibilité */
 }
