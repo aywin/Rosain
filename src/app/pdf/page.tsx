@@ -344,7 +344,7 @@ export default function PdfPage() {
         </div>
     );
 
-    const SelectionOverlay = ({ canvasEl, overlayEl }: { canvasEl: React.RefObject<HTMLCanvasElement>, overlayEl: React.RefObject<HTMLCanvasElement> }) => {
+    const SelectionOverlay = ({ canvasEl, overlayEl }: { canvasEl: React.RefObject<HTMLCanvasElement | null>, overlayEl: React.RefObject<HTMLCanvasElement | null> }) => {
         const css = canvasToCss(selRect, canvasEl.current);
         return (
             <>
