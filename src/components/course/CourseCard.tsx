@@ -88,8 +88,8 @@ export default function CourseCard({ course, onEnroll }: Props) {
         config = {
           buttonLabel: "Commencer",
           buttonIcon: <FaPlay />,
-          buttonBg: colors.navy,
-          buttonHover: "#001A4D",
+          buttonBg: "#E65100",
+          buttonHover: "#BF360C",
           badge: { text: "Non commencé", bg: "#FFF3E0", color: "#E65100", icon: <FaClock /> },
           cardBg: "bg-orange-50",
           cardBorder: "border-orange-200"

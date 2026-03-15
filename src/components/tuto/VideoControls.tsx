@@ -27,58 +27,63 @@ export default function VideoControls({
   onNext,
 }: VideoControlsProps) {
   return (
-    <div className="flex items-center justify-between w-[70%] mt-3 px-4 text-white bg-gray-900 rounded-lg py-3 shadow-md">
-      <div className="flex gap-3">
+    <div className="flex items-center justify-between w-full md:w-[70%] mt-3 px-3 md:px-4 text-white bg-gray-900 rounded-lg py-2.5 md:py-3 shadow-md gap-2">
+
+      {/* Groupe gauche : contrôles de lecture */}
+      <div className="flex items-center gap-1.5 md:gap-3">
         <button
           onClick={onSeekBackward}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-700 rounded-lg hover:bg-gray-700 transition"
+          className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-2 border border-gray-700 rounded-lg hover:bg-gray-700 transition"
           title="Reculer de 10 secondes"
         >
-          <FaBackward className="text-lg" />
-          <span className="text-sm">10s</span>
+          <FaBackward className="text-base md:text-lg" />
+          <span className="text-xs md:text-sm">10s</span>
         </button>
 
         <button
           onClick={onPlayPause}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition font-semibold"
+          className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition font-semibold"
           title={isPlaying ? "Pause" : "Lecture"}
         >
           {isPlaying ? (
             <>
-              <FaPause className="text-lg" />
-              <span>Pause</span>
+              <FaPause className="text-base md:text-lg" />
+              {/* Label masqué sur très petits écrans */}
+              <span className="hidden sm:inline text-sm">Pause</span>
             </>
           ) : (
             <>
-              <FaPlay className="text-lg" />
-              <span>Lecture</span>
+              <FaPlay className="text-base md:text-lg" />
+              <span className="hidden sm:inline text-sm">Lecture</span>
             </>
           )}
         </button>
 
         <button
           onClick={onSeekForward}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-700 rounded-lg hover:bg-gray-700 transition"
+          className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-2 border border-gray-700 rounded-lg hover:bg-gray-700 transition"
           title="Avancer de 10 secondes"
         >
-          <span className="text-sm">10s</span>
-          <FaForward className="text-lg" />
+          <span className="text-xs md:text-sm">10s</span>
+          <FaForward className="text-base md:text-lg" />
         </button>
       </div>
 
-      <div className="font-mono text-sm">
+      {/* Centre : timer */}
+      <div className="font-mono text-xs md:text-sm flex-shrink-0">
         <span className="text-blue-400">{formatTime(currentTime)}</span>
         <span className="text-gray-500 mx-1">/</span>
         <span className="text-gray-400">{formatTime(duration)}</span>
       </div>
 
+      {/* Bouton suivant */}
       <button
         onClick={onNext}
-        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 transition rounded-lg px-4 py-2 font-semibold shadow-sm"
+        className="flex items-center gap-1 md:gap-2 bg-green-600 hover:bg-green-700 transition rounded-lg px-2.5 md:px-4 py-2 font-semibold shadow-sm flex-shrink-0"
         title="Chapitre suivant"
       >
-        <span>Suivant</span>
-        <FaStepForward className="text-lg" />
+        <span className="hidden sm:inline text-sm">Suivant</span>
+        <FaStepForward className="text-base md:text-lg" />
       </button>
     </div>
   );

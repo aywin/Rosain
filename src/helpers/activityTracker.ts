@@ -1,3 +1,4 @@
+// src/helpers/activityTracker.ts
 "use client";
 
 import { db } from "@/firebase";
@@ -25,61 +26,67 @@ interface VideoProgressData {
   updatedAt: any;
 }
 
-// 🔹 Enregistrer réponse quiz (1ère + dernière)
+export interface ExoProgressData {
+  userId: string;
+  exoId: string;
+  courseId: string;
+  score: number;
+  total: number;
+  scorePercent: number;
+  answers: Record<string, number[]>;
+  completedAt: any;
+}
+
+// ── Quiz : première + dernière tentative ──
 export async function logQuizResponse(data: QuizResponseData) {
   try {
-    const firstDocRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_first`);
-    const lastDocRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_last`);
+    const firstRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_first`);
+    const lastRef = doc(db, "quizResponses", `${data.userId}_${data.quizId}_last`);
 
-    // Vérifie si la première tentative existe
-    const firstSnap = await getDoc(firstDocRef);
+    // ⚡ Lire first et écrire last en parallèle
+    const [firstSnap] = await Promise.all([
+      getDoc(firstRef),
+      setDoc(lastRef, { ...data, attemptType: "last", submittedAt: serverTimestamp() }),
+    ]);
+
     if (!firstSnap.exists()) {
-      await setDoc(firstDocRef, {
-        ...data,
-        attemptType: "first",
-        submittedAt: serverTimestamp(),
-      });
+      await setDoc(firstRef, { ...data, attemptType: "first", submittedAt: serverTimestamp() });
     }
-
-    // Toujours mettre à jour le doc "last"
-    await setDoc(lastDocRef, {
-      ...data,
-      attemptType: "last",
-      submittedAt: serverTimestamp(),
-    });
   } catch (err) {
     console.error("Erreur logQuizResponse:", err);
   }
 }
 
-// 🔹 Mettre à jour progression vidéo (ne pas écraser si inférieur)
+// ── Vidéo : setDoc direct, logique max position gérée côté client ──
 export async function logVideoProgress(data: VideoProgressData) {
   try {
-    const docId = `${data.userId}_${data.videoId}`;
-    const docRef = doc(db, "videoProgress", docId);
-
-    // Récupère le doc existant
-    const docSnap = await getDoc(docRef);
-
-    if (!docSnap.exists()) {
-      // S'il n'existe pas encore → création
-      await setDoc(docRef, {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      const existingData = docSnap.data() as VideoProgressData;
-
-      // Met à jour uniquement si la nouvelle position est supérieure
-      if (data.lastPosition > existingData.lastPosition) {
-        await setDoc(docRef, {
-          ...data,
-          updatedAt: serverTimestamp(),
-        });
-      }
-      // sinon on ne fait rien
-    }
+    await setDoc(
+      doc(db, "videoProgress", `${data.userId}_${data.videoId}`),
+      { ...data, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
   } catch (err) {
     console.error("Erreur logVideoProgress:", err);
+  }
+}
+
+// ── Exercice : première + dernière tentative ──
+export async function logExoProgress(data: ExoProgressData) {
+  try {
+    const docId = `${data.userId}_${data.exoId}`;
+    const firstRef = doc(db, "exerciseProgress", `${docId}_first`);
+    const lastRef = doc(db, "exerciseProgress", docId);
+
+    // ⚡ Lire first et écrire last en parallèle
+    const [firstSnap] = await Promise.all([
+      getDoc(firstRef),
+      setDoc(lastRef, { ...data, attemptType: "last", completedAt: serverTimestamp() }),
+    ]);
+
+    if (!firstSnap.exists()) {
+      await setDoc(firstRef, { ...data, attemptType: "first", completedAt: serverTimestamp() });
+    }
+  } catch (err) {
+    console.error("Erreur logExoProgress:", err);
   }
 }

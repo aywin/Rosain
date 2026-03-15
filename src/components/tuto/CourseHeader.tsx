@@ -1,3 +1,4 @@
+// src/components/tuto/Courseheader.tsx
 import { FaBars, FaGraduationCap, FaBook } from "react-icons/fa";
 
 interface CourseHeaderProps {

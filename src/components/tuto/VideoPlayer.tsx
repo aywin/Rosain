@@ -30,12 +30,17 @@ interface VideoPlayerProps {
   videoIdFirestore: string;
   onAssistantClick: () => void;
   onNext: () => void;
+  onVideoEnded?: () => void;
+  /** Appelé une seule fois quand 90% de la vidéo est atteint */
+  onNinetyPercent?: () => void;
   quizzes?: Quiz[];
   transcript?: TranscriptSegment[];
   language?: string;
   isGenerated?: boolean;
   isMathJaxFormatted?: boolean;
   onTimeUpdate?: (time: number) => void;
+  initialPosition?: number;
+  subject?: string;
 }
 
 export default function VideoPlayer({
@@ -45,18 +50,25 @@ export default function VideoPlayer({
   videoIdFirestore,
   onAssistantClick,
   onNext,
+  onVideoEnded,
+  onNinetyPercent,
   quizzes = [],
   transcript = [],
   language,
   isGenerated,
   isMathJaxFormatted,
   onTimeUpdate,
+  initialPosition = 0,
+  subject = "Math",
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const rafRef = useRef<number | null>(null);
   const onNextRef = useRef(onNext);
-  const lastTimeUpdateRef = useRef<number>(0);
+  const onVideoEndedRef = useRef(onVideoEnded);
+  const maxPositionRef = useRef<number>(initialPosition);
+  const ninetyPercentFiredRef = useRef<boolean>(false);
+  const lastLoggedRef = useRef<number>(0);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -74,15 +86,10 @@ export default function VideoPlayer({
   const displayedRef = useRef<string[]>([]);
   const savedAnswersRef = useRef<Record<string, Record<number, number>>>({});
 
-  useEffect(() => {
-    onNextRef.current = onNext;
-  }, [onNext]);
-  useEffect(() => {
-    displayedRef.current = displayedQuizzes;
-  }, [displayedQuizzes]);
-  useEffect(() => {
-    savedAnswersRef.current = savedQuizAnswers;
-  }, [savedQuizAnswers]);
+  useEffect(() => { onNextRef.current = onNext; }, [onNext]);
+  useEffect(() => { onVideoEndedRef.current = onVideoEnded; }, [onVideoEnded]);
+  useEffect(() => { displayedRef.current = displayedQuizzes; }, [displayedQuizzes]);
+  useEffect(() => { savedAnswersRef.current = savedQuizAnswers; }, [savedQuizAnswers]);
 
   const getVideoId = (url: string) => {
     const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
@@ -100,8 +107,10 @@ export default function VideoPlayer({
     setDuration(0);
     setIsPlaying(false);
     setCountdown(null);
-    lastTimeUpdateRef.current = 0;
-  }, [videoId]);
+    maxPositionRef.current = initialPosition;
+    lastLoggedRef.current = 0;
+    ninetyPercentFiredRef.current = false;
+  }, [videoId, initialPosition]);
 
   useEffect(() => {
     if (!videoId || !containerRef.current) {
@@ -112,9 +121,15 @@ export default function VideoPlayer({
 
     const onPlayerReady = (event: any) => {
       playerRef.current = event.target;
-      setDuration(playerRef.current.getDuration());
+      const dur = playerRef.current.getDuration();
+      setDuration(dur);
       setIsPlayerReady(true);
       setError(null);
+
+      if (initialPosition > 0 && initialPosition < dur - 5) {
+        playerRef.current.seekTo(initialPosition, true);
+        setCurrentTime(initialPosition);
+      }
     };
 
     const onPlayerStateChange = (event: any) => {
@@ -129,6 +144,7 @@ export default function VideoPlayer({
 
       if (state === window.YT.PlayerState.ENDED) {
         stopProgressLoop();
+        onVideoEndedRef.current?.();
         startCountdown(3);
       }
     };
@@ -180,17 +196,13 @@ export default function VideoPlayer({
   useEffect(() => {
     if (!duration) return;
 
-    let lastLogged = 0;
-
     const loop = () => {
       if (playerRef.current?.getCurrentTime) {
-        const rawTime = playerRef.current.getCurrentTime();
-        const t = Math.round(rawTime * 100) / 100;
+        const t = Math.round(playerRef.current.getCurrentTime() * 100) / 100;
 
         setCurrentTime(t);
 
-        if (onTimeUpdate && t - lastTimeUpdateRef.current >= 0.5) {
-          lastTimeUpdateRef.current = t;
+        if (onTimeUpdate && Math.abs(t - lastLoggedRef.current) >= 0.5) {
           onTimeUpdate(t);
         }
 
@@ -198,22 +210,33 @@ export default function VideoPlayer({
 
         const user = auth.currentUser;
         if (user && videoIdFirestore) {
-          if (t - lastLogged >= 5 || t === duration) {
-            lastLogged = t;
-            const minutesWatched = t / 60;
-            const minutesRemaining = duration / 60 - minutesWatched;
-            const completed = t >= duration - 1;
+          if (t - lastLoggedRef.current >= 15 || t >= duration - 1) {
+            if (t > maxPositionRef.current) {
+              maxPositionRef.current = t;
 
-            logVideoProgress({
-              userId: user.uid,
-              videoId: videoIdFirestore,
-              courseId,
-              minutesWatched,
-              minutesRemaining,
-              lastPosition: t,
-              completed,
-              updatedAt: new Date(),
-            });
+              // ⚡ Déclencher onNinetyPercent une seule fois
+              if (
+                !ninetyPercentFiredRef.current &&
+                duration > 0 &&
+                t >= duration * 0.9
+              ) {
+                ninetyPercentFiredRef.current = true;
+                onNinetyPercent?.();
+              }
+              lastLoggedRef.current = t;
+              logVideoProgress({
+                userId: user.uid,
+                videoId: videoIdFirestore,
+                courseId,
+                minutesWatched: t / 60,
+                minutesRemaining: duration / 60 - t / 60,
+                lastPosition: t,
+                completed: t >= duration - 1,
+                updatedAt: new Date(),
+              });
+            } else {
+              lastLoggedRef.current = t;
+            }
           }
         }
       }
@@ -222,7 +245,6 @@ export default function VideoPlayer({
     };
 
     if (isPlaying) rafRef.current = requestAnimationFrame(loop);
-
     return () => stopProgressLoop();
   }, [isPlaying, duration, videoIdFirestore, courseId, onTimeUpdate]);
 
@@ -364,14 +386,20 @@ export default function VideoPlayer({
   };
 
   return (
-    <div className="flex flex-col items-center relative w-full max-w-5xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">{title}</h2>
+    <div className="flex flex-col items-center relative w-full max-w-5xl mx-auto px-2 md:px-0">
+      {/* Titre */}
+      <h2 className="text-lg md:text-2xl font-bold mb-4 md:mb-6 text-gray-800 text-center w-full">
+        {title}
+      </h2>
 
       {error ? (
-        <p className="text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200">{error}</p>
+        <p className="text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200">
+          {error}
+        </p>
       ) : (
         <>
-          <div className="relative w-[70%] aspect-video rounded-xl overflow-hidden shadow-2xl">
+          {/* ── Vidéo : plein écran sur mobile, 70% sur desktop ── */}
+          <div className="relative w-full md:w-[70%] aspect-video rounded-xl overflow-hidden shadow-2xl">
             <div ref={containerRef} className="w-full h-full pointer-events-none" />
             <div
               className="absolute inset-0 z-10 cursor-pointer"
@@ -379,7 +407,12 @@ export default function VideoPlayer({
             />
           </div>
 
-          <ProgressBar currentTime={currentTime} duration={duration} onSeek={handleSeek} />
+          {/* ── Progress bar : même largeur que la vidéo ── */}
+          <div className="w-full md:w-[70%]">
+            <ProgressBar currentTime={currentTime} duration={duration} onSeek={handleSeek} />
+          </div>
+
+          {/* ── Contrôles ── */}
           <VideoControls
             isPlaying={isPlaying}
             currentTime={currentTime}
@@ -390,12 +423,14 @@ export default function VideoPlayer({
             onNext={() => onNextRef.current?.()}
           />
 
+          {/* ── Countdown chapitre suivant ── */}
           {countdown !== null && (
-            <div className="mt-6 flex items-center justify-between bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg shadow-md border border-blue-200 w-[70%]">
+            <div className="mt-4 md:mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-gradient-to-r from-blue-50 to-green-50 p-3 md:p-4 rounded-lg shadow-md border border-blue-200 w-full md:w-[70%] gap-3 sm:gap-0">
               <div className="flex items-center gap-3">
-                <FaClock className="text-blue-600 text-xl animate-pulse" />
-                <p className="text-gray-800 font-medium">
-                  Prochain chapitre dans <span className="font-bold text-blue-600">{countdown}</span> sec...
+                <FaClock className="text-blue-600 text-xl animate-pulse flex-shrink-0" />
+                <p className="text-gray-800 font-medium text-sm md:text-base">
+                  Prochain chapitre dans{" "}
+                  <span className="font-bold text-blue-600">{countdown}</span> sec...
                 </p>
               </div>
               <button
@@ -403,18 +438,19 @@ export default function VideoPlayer({
                   setCountdown(null);
                   onNextRef.current?.();
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold shadow-sm"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold shadow-sm text-sm w-full sm:w-auto"
               >
                 Passer maintenant →
               </button>
             </div>
           )}
 
+          {/* ── Bouton assistant ── */}
           <button
             onClick={onAssistantClick}
-            className="mt-6 self-end flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition font-semibold shadow-md"
+            className="mt-4 md:mt-6 self-end flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-lg hover:from-green-600 hover:to-blue-600 transition font-semibold shadow-md text-sm md:text-base"
           >
-            <FaRobot className="text-lg" />
+            <FaRobot className="text-base md:text-lg" />
             <span>Ouvrir Assistant IA</span>
           </button>
 

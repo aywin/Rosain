@@ -8,7 +8,6 @@ import ExoMobileDrawer from "./ExoMobileDrawer";
 import ExoCard from "./ExoCard";
 import ExoAssistantPanel from "./ExoAssistantPanel";
 import { FaSpinner, FaRobot, FaTimes } from "react-icons/fa";
-import { useRouter } from "next/navigation";
 
 interface Level { id: string; name: string; }
 interface Subject { id: string; name: string; }
@@ -21,7 +20,6 @@ interface Exo {
 }
 
 export default function ExoList() {
-  const router = useRouter();
   const [levels, setLevels] = useState<Level[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -160,6 +158,18 @@ export default function ExoList() {
     );
   }
 
+  // ── Panel assistant — instance UNIQUE partagée desktop + mobile ──────────────
+  const assistantPanel = showAssistant ? (
+    <ExoAssistantPanel
+      onClose={() => { setShowAssistant(false); setCurrentExoContext(null); }}
+      exoContext={currentExoContext}
+      userLevel={currentLevel?.name}
+      userSubject={currentSubject?.name}
+      activeExercises={selectedExercises}
+      onExercisesChange={updateActiveExercises}
+    />
+  ) : null;
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
 
@@ -184,7 +194,7 @@ export default function ExoList() {
       {/* ── Contenu principal scrollable ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── Drawer mobile (remplace la barre mobile précédente) ── */}
+        {/* ── Drawer mobile ── */}
         <ExoMobileDrawer
           levels={levels}
           subjects={subjects}
@@ -275,11 +285,11 @@ export default function ExoList() {
         </div>
       </div>
 
-      {/* ── Bouton assistant flottant desktop ── */}
+      {/* ── Bouton assistant flottant (desktop) ── */}
       {!showAssistant && (
         <button
           onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
-          className="hidden md:flex fixed bottom-8 right-8 bg-green-600 hover:bg-green-700 text-white rounded-full px-5 py-3.5 shadow-2xl transition-all hover:scale-105 z-40 items-center gap-2.5"
+          className="hidden md:flex fixed bottom-8 right-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full px-5 py-3.5 shadow-2xl transition-all hover:scale-105 z-40 items-center gap-2.5"
         >
           <FaRobot className="text-xl" />
           <span className="font-semibold text-sm">Assistant IA</span>
@@ -291,11 +301,11 @@ export default function ExoList() {
         </button>
       )}
 
-      {/* ── Bouton assistant flottant mobile ── */}
+      {/* ── Bouton assistant flottant (mobile) ── */}
       {!showAssistant && (
         <button
           onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
-          className="md:hidden fixed bottom-4 right-4 bg-green-600 text-white rounded-full w-14 h-14 shadow-2xl z-40 flex items-center justify-center"
+          className="md:hidden fixed bottom-4 right-4 bg-teal-700 text-white rounded-full w-14 h-14 shadow-2xl z-40 flex items-center justify-center"
         >
           <FaRobot className="text-xl" />
           {selectedExerciseIds.size > 0 && (
@@ -306,53 +316,40 @@ export default function ExoList() {
         </button>
       )}
 
-      {/* ── Assistant desktop (panel latéral resizable) ── */}
+      {/* ── Assistant desktop — panel latéral resizable ── */}
       {showAssistant && (
         <div
           className="hidden md:block fixed right-0 top-0 h-full bg-white shadow-2xl z-50 border-l"
           style={{ width: `${assistantWidth}px` }}
         >
+          {/* Handle resize */}
           <div
-            className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-green-400 transition-colors group z-10"
+            className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-teal-400 transition-colors group z-10"
             onMouseDown={() => setIsResizing(true)}
           >
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-16 bg-gray-200 group-hover:bg-green-400 rounded-r transition" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-16 bg-gray-200 group-hover:bg-teal-400 rounded-r transition" />
           </div>
-          <ExoAssistantPanel
-            onClose={() => { setShowAssistant(false); setCurrentExoContext(null); }}
-            exoContext={currentExoContext}
-            userLevel={currentLevel?.name}
-            userSubject={currentSubject?.name}
-            activeExercises={selectedExercises}
-            onExercisesChange={updateActiveExercises}
-          />
+          {assistantPanel}
         </div>
       )}
 
-      {/* ── Assistant mobile (plein écran) ── */}
+      {/* ── Assistant mobile — plein écran ── */}
       {showAssistant && (
         <div className="md:hidden fixed inset-0 bg-white z-50 flex flex-col">
-          <div className="bg-green-600 text-white px-4 py-3 flex items-center justify-between shadow-md flex-shrink-0">
+          <div className="bg-teal-700 text-white px-4 py-3 flex items-center justify-between shadow-md flex-shrink-0">
             <div className="flex items-center gap-3">
               <FaRobot className="text-xl" />
               <h2 className="font-semibold text-lg">Assistant IA</h2>
             </div>
             <button
               onClick={() => { setShowAssistant(false); setCurrentExoContext(null); }}
-              className="p-2 hover:bg-green-700 rounded-full transition"
+              className="p-2 hover:bg-teal-800 rounded-full transition"
             >
               <FaTimes className="text-xl" />
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ExoAssistantPanel
-              onClose={() => { setShowAssistant(false); setCurrentExoContext(null); }}
-              exoContext={currentExoContext}
-              userLevel={currentLevel?.name}
-              userSubject={currentSubject?.name}
-              activeExercises={selectedExercises}
-              onExercisesChange={updateActiveExercises}
-            />
+            {assistantPanel}
           </div>
         </div>
       )}
