@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Crop, X, FileText, Bot } from "lucide-react";
 import { MathJaxContext } from "better-react-mathjax";
-import PdfAssistantPanel, { PdfAssistantHandle } from "@/components/exo/PdfAssistantPanel";
+import ExoAssistantPanel from "@/components/exo/ExoAssistantPanel";
 
 const mathJaxConfig = {
     loader: { load: ["input/tex", "output/chtml"] },
@@ -26,9 +26,11 @@ export default function PdfPage() {
     const [selRect, setSelRect] = useState<SelRect>({ x: 0, y: 0, w: 0, h: 0 });
     const [showResolve, setShowResolve] = useState(false);
     const [mobileTab, setMobileTab] = useState<MobileTab>("pdf");
-    const [isDesktop, setIsDesktop] = useState(true); // SSR-safe
+    const [isDesktop, setIsDesktop] = useState(true);
 
-    // Détecter desktop/mobile côté client
+    // Remplace assistantRef — on stocke le handler exposé par ExoAssistantPanel via onImageCapture
+    const [imageHandler, setImageHandler] = useState<((file: File) => void) | null>(null);
+
     useEffect(() => {
         const mq = window.matchMedia("(min-width: 768px)");
         setIsDesktop(mq.matches);
@@ -50,11 +52,9 @@ export default function PdfPage() {
     useEffect(() => { selRectRef.current = selRect; }, [selRect]);
     useEffect(() => { selModeRef.current = selMode; }, [selMode]);
 
-    // ── UN SEUL canvas — jamais retiré du DOM ──────────────────────────────────
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const overlayRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const assistantRef = useRef<PdfAssistantHandle>(null);
     const pdfjsRef = useRef<any>(null);
     const pdfDocRef = useRef<any>(null);
     const renderTaskRef = useRef<any>(null);
@@ -70,7 +70,6 @@ export default function PdfPage() {
         });
     }, []);
 
-    // ── Overlay ────────────────────────────────────────────────────────────────
     const redrawOverlay = useCallback((rect: SelRect) => {
         const canvas = canvasRef.current;
         const overlay = overlayRef.current;
@@ -86,7 +85,6 @@ export default function PdfPage() {
         if (rect.w > 0 && rect.h > 0) ctx.clearRect(rect.x, rect.y, rect.w, rect.h);
     }, []);
 
-    // ── Render page ────────────────────────────────────────────────────────────
     const renderPage = useCallback(async (pageNum: number, doc: any) => {
         if (!doc) return;
         if (isRenderingRef.current) { pendingPageRef.current = pageNum; return; }
@@ -121,7 +119,6 @@ export default function PdfPage() {
 
     useEffect(() => { if (pdfDoc) renderPage(currentPage, pdfDoc); }, [pdfDoc, currentPage, renderPage]);
 
-    // ── Load PDF ───────────────────────────────────────────────────────────────
     const loadPDF = async (file: File) => {
         if (!pdfjsRef.current) return;
         setPdfLoading(true);
@@ -149,7 +146,6 @@ export default function PdfPage() {
         if (c !== currentPage) setCurrentPage(c);
     };
 
-    // ── Sélection ─────────────────────────────────────────────────────────────
     const enterSelection = () => {
         const empty = { x: 0, y: 0, w: 0, h: 0 };
         setSelRect(empty); selRectRef.current = empty;
@@ -248,7 +244,8 @@ export default function PdfPage() {
             if (!blob) return;
             const file = new File([blob], `exo-p${currentPage}.png`, { type: "image/png" });
             exitSelection();
-            assistantRef.current?.receiveCapture(file);
+            // Envoyer l'image au handler exposé par ExoAssistantPanel via onImageCapture
+            imageHandler?.(file);
             setMobileTab("assistant");
         }, "image/png");
     };
@@ -271,43 +268,23 @@ export default function PdfPage() {
 
     const css = canvasToCss(selRect);
 
-    // ── Styles dynamiques selon breakpoint ────────────────────────────────────
-    // PDF zone : toujours dans le DOM. Sur mobile+onglet assistant : invisible mais présente
     const pdfZoneStyle: React.CSSProperties = isDesktop
         ? { flex: 1, minWidth: 0 }
         : mobileTab === "pdf"
             ? { flex: 1, minWidth: 0 }
-            : {
-                // Mobile onglet assistant : hors écran via position absolute, canvas garde sa taille
-                position: "absolute",
-                width: "1px",
-                height: "1px",
-                overflow: "hidden",
-                opacity: 0,
-                pointerEvents: "none",
-                zIndex: -1,
-            };
+            : { position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", zIndex: -1 };
 
-    // Assistant : colonne fixe desktop, plein écran mobile selon onglet
     const assistantStyle: React.CSSProperties = isDesktop
         ? { width: 380, flexShrink: 0 }
         : mobileTab === "assistant"
             ? { position: "absolute", inset: 0, zIndex: 10 }
-            : {
-                position: "absolute",
-                width: "1px",
-                height: "1px",
-                overflow: "hidden",
-                opacity: 0,
-                pointerEvents: "none",
-                zIndex: -1,
-            };
+            : { position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", zIndex: -1 };
 
     return (
         <MathJaxContext config={mathJaxConfig}>
             <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
 
-                {/* ── Top bar ── */}
+                {/* Top bar */}
                 <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-white border-b shadow-sm flex-shrink-0">
                     <Link href="/exercices" className="flex items-center gap-1 md:gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition flex-shrink-0">
                         <ArrowLeft size={16} /><span className="hidden sm:inline">Exercices</span>
@@ -322,15 +299,11 @@ export default function PdfPage() {
                         onChange={(e) => { const f = e.target.files?.[0]; if (f) loadPDF(f); e.target.value = ""; }} />
                 </div>
 
-                {/* ── Corps ── */}
+                {/* Corps */}
                 <div className="flex flex-1 overflow-hidden relative">
 
-                    {/* ── Zone PDF — UN SEUL canvas, jamais démonté ── */}
-                    <div
-                        className="flex flex-col overflow-hidden border-r border-gray-200 bg-gray-200"
-                        style={pdfZoneStyle}
-                    >
-                        {/* NavBar pagination */}
+                    {/* Zone PDF */}
+                    <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-gray-200" style={pdfZoneStyle}>
                         {pdfDoc && (
                             <div className="flex items-center justify-between px-3 md:px-4 py-2 bg-white border-b flex-shrink-0">
                                 <div className="flex items-center gap-1.5">
@@ -350,7 +323,6 @@ export default function PdfPage() {
                             </div>
                         )}
 
-                        {/* Canvas scroll area */}
                         <div className="flex-1 overflow-auto flex justify-center" style={{ padding: pdfDoc ? "24px" : 0 }}>
                             {!pdfDoc && !pdfLoading && (
                                 <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
@@ -374,16 +346,11 @@ export default function PdfPage() {
                                     onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={processUp} onMouseLeave={processUp}
                                     onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={processUp}
                                 >
-                                    {/* LE canvas unique */}
                                     <canvas ref={canvasRef} className="block shadow-xl rounded" style={{ maxWidth: "100%" }} />
-
-                                    {/* Overlay masque sélection */}
                                     {selMode && (
                                         <canvas ref={overlayRef} className="absolute inset-0 rounded"
                                             style={{ width: "100%", height: "100%", pointerEvents: "none" }} />
                                     )}
-
-                                    {/* Rectangle de sélection */}
                                     {selMode && selRect.w > 0 && selRect.h > 0 && (
                                         <div style={{ position: "absolute", left: css.x, top: css.y, width: css.w, height: css.h, border: "2px solid #3b82f6", cursor: "move", pointerEvents: "all", zIndex: 10, boxSizing: "border-box" }}>
                                             <div style={{ position: "absolute", top: -24, left: 0, background: "#3b82f6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none" }}>
@@ -415,21 +382,17 @@ export default function PdfPage() {
                         </div>
                     </div>
 
-                    {/* ── Assistant — UN SEUL nœud, jamais démonté ──
-                        Desktop  : colonne fixe 380px
-                        Mobile   : plein écran absolu sur onglet assistant,
-                                   hors écran (1x1px) sur onglet pdf
-                    ── */}
-                    <div
-                        className="flex flex-col bg-white overflow-hidden"
-                        style={assistantStyle}
-                    >
-                        <PdfAssistantPanel ref={assistantRef} />
+                    {/* Assistant — ExoAssistantPanel remplace PdfAssistantPanel */}
+                    <div className="flex flex-col bg-white overflow-hidden" style={assistantStyle}>
+                        <ExoAssistantPanel
+                            onClose={() => { }}
+                            onImageCapture={(handler) => setImageHandler(() => handler)}
+                        />
                     </div>
 
                 </div>
 
-                {/* ── Tab bar mobile uniquement ── */}
+                {/* Tab bar mobile */}
                 {!isDesktop && (
                     <div className="flex flex-shrink-0 bg-white border-t border-gray-200">
                         <button
@@ -440,7 +403,7 @@ export default function PdfPage() {
                         </button>
                         <button
                             onClick={() => setMobileTab("assistant")}
-                            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "assistant" ? "text-green-600 border-t-2 border-green-600 -mt-px" : "text-gray-500"}`}
+                            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "assistant" ? "text-teal-600 border-t-2 border-teal-600 -mt-px" : "text-gray-500"}`}
                         >
                             <Bot size={20} /><span>Assistant</span>
                         </button>

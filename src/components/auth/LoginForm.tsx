@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/firebase";
+import { auth, db } from "@/firebase";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { resolvePendingChildren } from "@/helpers/parentFetchers";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -15,48 +17,54 @@ export default function LoginForm() {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setMessage("");
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
 
-  try {
-    const userCred = await signInWithEmailAndPassword(auth, form.email, form.password);
-    console.log("✅ Connecté :", userCred.user);
-    router.push("/");
-  } catch (err: any) {
-    console.error("❌ Erreur login :", err.code, err.message);
+    try {
+      const userCred = await signInWithEmailAndPassword(auth, form.email, form.password);
+      const userId = userCred.user.uid;
 
-    const errorMessages: Record<string, string> = {
-      "auth/invalid-email": "Adresse email invalide.",
-      "auth/user-disabled": "Ce compte a été désactivé.",
-      "auth/user-not-found": "Aucun compte associé à cet email.",
-      "auth/wrong-password": "Mot de passe incorrect.",
-      "auth/invalid-credential": "Email ou mot de passe incorrect.",
-    };
+      // Résoudre les pendingChildrenEmails si parent/tuteur
+      const userSnap = await getDoc(doc(db, "users", userId));
+      if (userSnap.exists()) {
+        const role = userSnap.data().role;
+        if (role === "parent" || role === "tuteur") {
+          // Fire-and-forget — ne bloque pas la navigation
+          resolvePendingChildren(userId).catch(console.error);
+          router.push("/parent");
+          return;
+        }
+      }
 
-    setError(errorMessages[err.code] || "Une erreur est survenue. Réessayez plus tard.");
-  }
-};
+      router.push("/");
+    } catch (err: any) {
+      const errorMessages: Record<string, string> = {
+        "auth/invalid-email": "Adresse email invalide.",
+        "auth/user-disabled": "Ce compte a été désactivé.",
+        "auth/user-not-found": "Aucun compte associé à cet email.",
+        "auth/wrong-password": "Mot de passe incorrect.",
+        "auth/invalid-credential": "Email ou mot de passe incorrect.",
+      };
+      setError(errorMessages[err.code] || "Une erreur est survenue. Réessayez plus tard.");
+    }
+  };
 
   const handleForgotPassword = async () => {
     setError("");
     setMessage("");
-
     if (!form.email) {
-      setResetMode(true); // on passe en mode reset (cache le champ mot de passe)
+      setResetMode(true);
       setError("⚠️ Veuillez entrer votre email pour réinitialiser le mot de passe.");
       return;
     }
-
     try {
       await sendPasswordResetEmail(auth, form.email);
       setMessage("📧 Un email de réinitialisation a été envoyé à " + form.email);
-      setError("");
-      setResetMode(true); // on cache le champ mot de passe
-    } catch (err: any) {
-      console.error("❌ Erreur reset password :", err.code, err.message);
-      setError("Impossible d’envoyer l’email de réinitialisation.");
+      setResetMode(true);
+    } catch {
+      setError("Impossible d'envoyer l'email de réinitialisation.");
     }
   };
 
@@ -67,7 +75,6 @@ const handleLogin = async (e: React.FormEvent) => {
     >
       <h2 className="text-2xl font-bold mb-4">Connexion</h2>
 
-      {/* Champ Email */}
       <input
         type="email"
         name="email"
@@ -78,7 +85,6 @@ const handleLogin = async (e: React.FormEvent) => {
         className="input mb-2 w-full"
       />
 
-      {/* Champ Password caché si resetMode */}
       {!resetMode && (
         <input
           type="password"
@@ -91,45 +97,29 @@ const handleLogin = async (e: React.FormEvent) => {
         />
       )}
 
-      {/* Messages */}
       {error && <div className="text-red-500 mb-2">{error}</div>}
       {message && <div className="text-green-600 mb-2">{message}</div>}
 
-      {/* Boutons */}
       {!resetMode ? (
-        <button
-          type="submit"
-          className="bg-blue-700 text-white px-4 py-2 rounded w-full"
-        >
+        <button type="submit" className="bg-teal-700 text-white px-4 py-2 rounded w-full hover:bg-teal-800 transition">
           Se connecter
         </button>
       ) : (
-        <button
-          type="button"
-          className="bg-blue-700 text-white px-4 py-2 rounded w-full"
-          onClick={handleForgotPassword}
-        >
+        <button type="button" className="bg-teal-700 text-white px-4 py-2 rounded w-full hover:bg-teal-800 transition" onClick={handleForgotPassword}>
           Envoyer le lien de réinitialisation
         </button>
       )}
 
-      {/* Liens */}
       <div className="text-right mt-2">
-        <span
-          className="text-sm text-blue-700 underline cursor-pointer"
-          onClick={handleForgotPassword}
-        >
+        <span className="text-sm text-teal-700 underline cursor-pointer" onClick={handleForgotPassword}>
           Mot de passe oublié ?
         </span>
       </div>
 
       <div className="text-center mt-4">
         Pas encore de compte ?{" "}
-        <span
-          className="text-blue-700 underline cursor-pointer"
-          onClick={() => router.push("/signup")}
-        >
-          S’inscrire
+        <span className="text-teal-700 underline cursor-pointer" onClick={() => router.push("/signup")}>
+          S'inscrire
         </span>
       </div>
     </form>
