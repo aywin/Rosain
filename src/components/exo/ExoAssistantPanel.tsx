@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { X, Send, Camera, Upload, ImagePlus, Paperclip, Trash2, Plus, ChevronLeft, Clock } from "lucide-react";
 import { FaTimes } from "react-icons/fa";
 import { MathJax } from "better-react-mathjax";
@@ -8,13 +8,11 @@ import { auth, db } from "@/firebase";
 import { preprocessLatex } from "@/components/admin/utils/latexUtils";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
-// ── Constantes ────────────────────────────────────────────────────────────────
 const INDEX_DOC_ID = (userId: string) => `${userId}_exo_index`;
 const SESSION_DOC_ID = (userId: string, sessionId: string) => `${userId}_exo_${sessionId}`;
 const MAX_MESSAGES = 50;
 const MAX_SESSIONS = 20;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface ExoContext {
     id: string; title: string; statement?: string; solution?: string;
     difficulty?: string; tags?: string[]; level?: string; subject?: string;
@@ -58,7 +56,10 @@ const renderMessageContent = (text: string) => {
     });
 };
 
-export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Terminal", userSubject = "Maths", activeExercises: initialActiveExercises = [], onExercisesChange, onImageCapture }: ExoAssistantPanelProps) {
+const ExoAssistantPanel = memo(function ExoAssistantPanel({
+    onClose, exoContext, userLevel = "Terminal", userSubject = "Maths",
+    activeExercises: initialActiveExercises = [], onExercisesChange, onImageCapture
+}: ExoAssistantPanelProps) {
     const [view, setView] = useState<"sessions" | "chat">("sessions");
     const [sessions, setSessions] = useState<SessionMeta[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -79,6 +80,18 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
     const dropZoneRef = useRef<HTMLDivElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
     const isFirstMessageSave = useRef(true);
+
+    // ── FIX A : initialActiveExercises est un nouveau tableau à chaque render ──
+    // On utilise une ref pour détecter les vraies modifications (par JSON)
+    // sans déclencher de boucle infinie.
+    const prevExercisesRef = useRef<string>("");
+    useEffect(() => {
+        const serialized = JSON.stringify(initialActiveExercises);
+        if (serialized !== prevExercisesRef.current) {
+            prevExercisesRef.current = serialized;
+            setActiveExercises(initialActiveExercises);
+        }
+    }, [initialActiveExercises]);
 
     // ── Charger l'index au montage ────────────────────────────────────────────
     useEffect(() => {
@@ -108,40 +121,13 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
         save();
     }, [messages, historyLoading, currentSessionId]);
 
-    useEffect(() => { setActiveExercises(initialActiveExercises); }, [initialActiveExercises]);
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-    useEffect(() => { if (onImageCapture) onImageCapture(handleImageUpload); }, [onImageCapture, activeExercises]);
 
     useEffect(() => {
         const h = (e: MouseEvent) => { if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) setShowAttachMenu(false); };
         document.addEventListener("mousedown", h);
         return () => document.removeEventListener("mousedown", h);
     }, []);
-
-    useEffect(() => {
-        const h = async (e: ClipboardEvent) => {
-            if (view !== "chat") return;
-            const items = e.clipboardData?.items;
-            if (!items) return;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf("image") !== -1) { e.preventDefault(); const blob = items[i].getAsFile(); if (blob) await handleImageUpload(blob); break; }
-            }
-        };
-        document.addEventListener("paste", h);
-        return () => document.removeEventListener("paste", h);
-    }, [activeExercises, view]);
-
-    useEffect(() => {
-        const dropZone = dropZoneRef.current;
-        if (!dropZone || view !== "chat") return;
-        const onDragOver = (e: DragEvent) => { e.preventDefault(); setIsDragging(true); };
-        const onDragLeave = (e: DragEvent) => { e.preventDefault(); if (e.target === dropZone) setIsDragging(false); };
-        const onDrop = async (e: DragEvent) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer?.files?.[0]; if (f?.type.startsWith("image/")) await handleImageUpload(f); };
-        dropZone.addEventListener("dragover", onDragOver);
-        dropZone.addEventListener("dragleave", onDragLeave);
-        dropZone.addEventListener("drop", onDrop);
-        return () => { dropZone.removeEventListener("dragover", onDragOver); dropZone.removeEventListener("dragleave", onDragLeave); dropZone.removeEventListener("drop", onDrop); };
-    }, [activeExercises, view]);
 
     // ── Sessions ──────────────────────────────────────────────────────────────
     const createNewSession = () => {
@@ -199,35 +185,123 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
     };
 
     // ── Image ─────────────────────────────────────────────────────────────────
-    const handleImageUpload = async (file: File) => {
+    // FIX B : useCallback stable — dépend uniquement de onExercisesChange
+    // Les useEffect paste/drag utilisent handleImageUpload via ref pour éviter
+    // de les re-monter à chaque fois que handleImageUpload change.
+    const handleImageUpload = useCallback(async (file: File) => {
         const userId = auth.currentUser?.uid;
         if (!userId) { addMsg("assistant", "❌ Vous devez être connecté."); return; }
         if (file.size > 5 * 1024 * 1024) { addMsg("assistant", "❌ Image trop lourde (max 5MB)"); return; }
-        if (!currentSessionId) { setCurrentSessionId(Date.now().toString()); isFirstMessageSave.current = true; setView("chat"); }
-        const reader = new FileReader();
-        reader.onload = (e) => setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: "", timestamp: new Date(), imagePreview: e.target?.result as string }]);
-        reader.readAsDataURL(file);
+
         setUploadingImage(true);
+        setCurrentSessionId(prev => {
+            if (!prev) { isFirstMessageSave.current = true; setView("chat"); return Date.now().toString(); }
+            return prev;
+        });
+
+        const reader = new FileReader();
+        reader.onload = (e) => setMessages(prev => [...prev, {
+            id: Date.now().toString(), role: "user", content: "",
+            timestamp: new Date(), imagePreview: e.target?.result as string
+        }]);
+        reader.readAsDataURL(file);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
+
         try {
             const formData = new FormData();
             formData.append("file", file);
-            const res = await fetch(buildApiUrl(apiConfig.endpoints.assistant.extractExercise, { user_id: userId }), { method: "POST", body: formData });
-            if (res.status === 429) { const d = await res.json(); addMsg("assistant", `🚫 Limite atteinte (${d.quota?.used}/${d.quota?.limit})\n\n⏰ Réinitialisation dans ${hoursUntilMidnight()}h`); setUploadingImage(false); return; }
+            const res = await fetch(
+                buildApiUrl(apiConfig.endpoints.assistant.extractExercise, { user_id: userId }),
+                { method: "POST", body: formData, signal: controller.signal }
+            );
+            if (res.status === 429) {
+                const d = await res.json();
+                addMsg("assistant", `🚫 Limite atteinte (${d.quota?.used}/${d.quota?.limit})\n\n⏰ Réinitialisation dans ${hoursUntilMidnight()}h`);
+                return;
+            }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (data.success && data.exercise) {
-                const newExo: ExoContext = { id: data.exercise.id, title: data.exercise.title, statement: data.exercise.statement, difficulty: data.exercise.difficulty, tags: data.exercise.tags, source: "photo" };
-                const updated = [...activeExercises, newExo];
-                setActiveExercises(updated);
-                onExercisesChange?.(updated);
+                const newExo: ExoContext = {
+                    id: data.exercise.id, title: data.exercise.title,
+                    statement: data.exercise.statement, difficulty: data.exercise.difficulty,
+                    tags: data.exercise.tags, source: "photo"
+                };
+                setActiveExercises(prev => {
+                    const updated = [...prev, newExo];
+                    onExercisesChange?.(updated);
+                    return updated;
+                });
                 let content = `✅ **${data.exercise.title}**\n\n${data.exercise.statement}`;
-                if (data.exercise.questions?.length > 0) content += `\n\n**Questions :**\n\n${data.exercise.questions.map((q: string, i: number) => `${i + 1}. ${q}`).join("\n\n")}`;
+                if (data.exercise.questions?.length > 0)
+                    content += `\n\n**Questions :**\n\n${data.exercise.questions.map((q: string, i: number) => `${i + 1}. ${q}`).join("\n\n")}`;
                 if (data.exercise.warning) content += `\n\n⚠️ ${data.exercise.warning}`;
                 addMsg("assistant", content);
             } else throw new Error(data.error || "Erreur extraction");
-        } catch { addMsg("assistant", "❌ Impossible d'analyser l'image."); }
-        finally { setUploadingImage(false); }
-    };
+        } catch (err: any) {
+            if (err?.name === "AbortError") {
+                addMsg("assistant", "⏱️ L'analyse a pris trop de temps. Réessaie dans quelques secondes.");
+            } else {
+                addMsg("assistant", "❌ Impossible d'analyser l'image.");
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            setUploadingImage(false);
+        }
+    }, [onExercisesChange]);
+
+    // ── FIX B (suite) : ref pour les event listeners paste/drag ──────────────
+    // On stocke handleImageUpload dans une ref — les event listeners la lisent
+    // via la ref et n'ont donc JAMAIS besoin d'être re-montés quand elle change.
+    const handleImageUploadRef = useRef(handleImageUpload);
+    useEffect(() => { handleImageUploadRef.current = handleImageUpload; }, [handleImageUpload]);
+
+    // paste — dépend uniquement de view, lit handleImageUpload via ref
+    useEffect(() => {
+        const h = async (e: ClipboardEvent) => {
+            if (view !== "chat") return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") !== -1) {
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    if (blob) await handleImageUploadRef.current(blob);
+                    break;
+                }
+            }
+        };
+        document.addEventListener("paste", h);
+        return () => document.removeEventListener("paste", h);
+    }, [view]); // view seul — pas de handleImageUpload dans les deps
+
+    // drag/drop — dépend uniquement de view, lit handleImageUpload via ref
+    useEffect(() => {
+        const dropZone = dropZoneRef.current;
+        if (!dropZone || view !== "chat") return;
+        const onDragOver = (e: DragEvent) => { e.preventDefault(); setIsDragging(true); };
+        const onDragLeave = (e: DragEvent) => { e.preventDefault(); if (e.target === dropZone) setIsDragging(false); };
+        const onDrop = async (e: DragEvent) => {
+            e.preventDefault(); setIsDragging(false);
+            const f = e.dataTransfer?.files?.[0];
+            if (f?.type.startsWith("image/")) await handleImageUploadRef.current(f);
+        };
+        dropZone.addEventListener("dragover", onDragOver);
+        dropZone.addEventListener("dragleave", onDragLeave);
+        dropZone.addEventListener("drop", onDrop);
+        return () => {
+            dropZone.removeEventListener("dragover", onDragOver);
+            dropZone.removeEventListener("dragleave", onDragLeave);
+            dropZone.removeEventListener("drop", onDrop);
+        };
+    }, [view]); // view seul — pas de handleImageUpload dans les deps
+
+    // ── Enregistrer le handler stable ────────────────────────────────────────
+    useEffect(() => {
+        if (onImageCapture) onImageCapture(handleImageUpload);
+    }, [onImageCapture, handleImageUpload]);
 
     const removeExercise = (exoId: string) => { const u = activeExercises.filter(ex => ex.id !== exoId); setActiveExercises(u); onExercisesChange?.(u); };
 
@@ -272,8 +346,7 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
     const minutesUntilMidnight = () => { const now = new Date(); const m = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)); return Math.floor(((m.getTime() - now.getTime()) % 3600000) / 60000); };
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askAI(); } };
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── VUE SESSIONS ─────────────────────────────────────────────────────────
+    // ── VUE SESSIONS ──────────────────────────────────────────────────────────
     if (view === "sessions") return (
         <div className="h-full flex flex-col bg-white">
             <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -319,8 +392,7 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
         </div>
     );
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── VUE CHAT ─────────────────────────────────────────────────────────────
+    // ── VUE CHAT ──────────────────────────────────────────────────────────────
     return (
         <div ref={dropZoneRef} className="h-full flex flex-col bg-white relative">
             {isDragging && (
@@ -341,7 +413,6 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
                     </div>
                 </div>
             )}
-            {/* Header chat */}
             <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -365,7 +436,6 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
                     )}
                 </div>
             </div>
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4">
                 {historyLoading ? (
                     <div className="h-full flex items-center justify-center"><div className="flex items-center gap-2 text-gray-400 text-sm"><div className="w-2 h-2 bg-teal-500 rounded-full animate-bounce" /><div className="w-2 h-2 bg-teal-500 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} /><div className="w-2 h-2 bg-teal-500 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} /><span className="ml-1">Chargement…</span></div></div>
@@ -398,7 +468,6 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
                     </div>
                 )}
             </div>
-            {/* Saisie */}
             <div className="px-3 pb-3 pt-2 border-t">
                 <input ref={fileInputGalleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleImageUpload(f); setShowAttachMenu(false); } e.target.value = ""; }} />
                 <input ref={fileInputCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleImageUpload(f); setShowAttachMenu(false); } e.target.value = ""; }} />
@@ -428,4 +497,6 @@ export default function ExoAssistantPanel({ onClose, exoContext, userLevel = "Te
             </div>
         </div>
     );
-}
+});
+
+export default ExoAssistantPanel;

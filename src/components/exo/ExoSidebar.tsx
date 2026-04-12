@@ -218,12 +218,15 @@ export default function ExoSidebar({
                                 {filteredCourses.length > 1 && (
                                     <div className="flex gap-3 px-2 py-0.5 mb-0.5">
                                         {safeIds.length < filteredCourses.length && (
-                                            <button
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
                                                 onClick={() => setCourseIds(filteredCourses.map(c => c.id))}
-                                                className="text-[11px] text-teal-600 hover:text-teal-800 transition font-medium"
+                                                onKeyDown={e => { if (e.key === "Enter") setCourseIds(filteredCourses.map(c => c.id)); }}
+                                                className="text-[11px] text-teal-600 hover:text-teal-800 transition font-medium cursor-pointer"
                                             >
                                                 Tout sélectionner
-                                            </button>
+                                            </span>
                                         )}
                                         {safeIds.length > 0 && (
                                             <button

@@ -1,478 +1,419 @@
 "use client";
-import { useState, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
-import { Send, Camera } from "lucide-react";
-import { MathJax } from "better-react-mathjax";
-import { buildApiUrl, apiConfig } from "@/config/api";
-import { auth } from "@/firebase";
-import { preprocessLatex } from "@/components/admin/utils/latexUtils";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ChevronLeft, ChevronRight, Crop, X, FileText, Bot } from "lucide-react";
+// MathJaxContext retiré — déjà monté dans layout.tsx, double montage causait des conflits
+import ExoAssistantPanel from "@/components/exo/ExoAssistantPanel";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface ExtractedExo {
-    id: string;
-    title: string;
-    statement?: string;
-    difficulty?: string;
-    tags?: string[];
-}
+interface SelRect { x: number; y: number; w: number; h: number; }
+type MobileTab = "pdf" | "assistant";
 
-interface Message {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    timestamp: Date;
-    imagePreview?: string;
-}
+export default function PdfPage() {
+    const router = useRouter();
 
-// Handle exposé au parent pour déclencher l'upload image depuis la page PDF
-export interface PdfAssistantHandle {
-    receiveCapture: (file: File) => void;
-}
+    const [pdfDoc, setPdfDoc] = useState<any>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
+    const [pdfLoading, setPdfLoading] = useState(false);
+    const [fileName, setFileName] = useState("");
+    const [selMode, setSelMode] = useState(false);
+    const [selRect, setSelRect] = useState<SelRect>({ x: 0, y: 0, w: 0, h: 0 });
+    const [showResolve, setShowResolve] = useState(false);
+    const [mobileTab, setMobileTab] = useState<MobileTab>("pdf");
+    const [isDesktop, setIsDesktop] = useState(true);
 
-// ── Rendu LaTeX ───────────────────────────────────────────────────────────────
-const renderContent = (text: string) => {
-    if (!text) return null;
-    const processed = preprocessLatex(text);
-    return processed
-        .split(/\n{2,}/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 0)
-        .map((p, i) => {
-            const isDisplay = p.startsWith("\\[") || p.startsWith("$$");
-            return (
-                <div
-                    key={i}
-                    className={`text-sm leading-relaxed ${isDisplay ? "my-3 text-center" : "mb-2"}`}
-                >
-                    <MathJax dynamic hideUntilTypeset="first">{p}</MathJax>
-                </div>
-            );
-        });
-};
+    // ── FIX 1 : ref stable pour le handler image (évite closure stale) ─────────
+    // On stocke le handler dans une ref plutôt qu'un useState.
+    // Ainsi imageHandlerRef.current pointe toujours vers la dernière version
+    // de handleImageUpload dans ExoAssistantPanel, même après re-renders.
+    const imageHandlerRef = useRef<((file: File) => void) | null>(null);
+    const handleImageCapture = useCallback((handler: (file: File) => void) => {
+        imageHandlerRef.current = handler;
+    }, []); // stable — ne provoque pas de re-renders
 
-// ── Composant ─────────────────────────────────────────────────────────────────
-const PdfAssistantPanel = forwardRef<PdfAssistantHandle>((_, ref) => {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [question, setQuestion] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [uploadingImage, setUploadingImage] = useState(false);
-    const [activeExos, setActiveExos] = useState<ExtractedExo[]>([]);
+    // stable — ne provoque pas de re-renders sur ExoAssistantPanel
+    const handleAssistantClose = useCallback(() => { }, []);
 
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => {
+        const mq = window.matchMedia("(min-width: 768px)");
+        setIsDesktop(mq.matches);
+        const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+    }, []);
+
+    const isDraggingRef = useRef(false);
+    const isMovingRef = useRef(false);
+    const isResizingRef = useRef(false);
+    const resizeDirRef = useRef("");
+    const selStartRef = useRef({ x: 0, y: 0 });
+    const moveOffsetRef = useRef({ x: 0, y: 0 });
+    const resizeAnchorRef = useRef<{ x: number; y: number; rect: SelRect } | null>(null);
+    const selRectRef = useRef<SelRect>({ x: 0, y: 0, w: 0, h: 0 });
+    const selModeRef = useRef(false);
+
+    useEffect(() => { selRectRef.current = selRect; }, [selRect]);
+    useEffect(() => { selModeRef.current = selMode; }, [selMode]);
+
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const overlayRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pdfjsRef = useRef<any>(null);
+    const pdfDocRef = useRef<any>(null);
+    const renderTaskRef = useRef<any>(null);
+    const isRenderingRef = useRef(false);
+    const pendingPageRef = useRef<number | null>(null);
 
-    // Ref pour accès aux messages dans les callbacks sans closure stale
-    const messagesRef = useRef<Message[]>([]);
-    useEffect(() => { messagesRef.current = messages; }, [messages]);
+    useEffect(() => { pdfDocRef.current = pdfDoc; }, [pdfDoc]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+        import("pdfjs-dist").then((pdfjs) => {
+            pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+            pdfjsRef.current = pdfjs;
+        });
+    }, []);
 
-    // Copier-coller d'images
-    useEffect(() => {
-        const handlePaste = async (e: ClipboardEvent) => {
-            const items = e.clipboardData?.items;
-            if (!items) return;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.startsWith("image")) {
-                    e.preventDefault();
-                    const blob = items[i].getAsFile();
-                    if (blob) await receiveCapture(blob);
-                    break;
-                }
-            }
-        };
-        document.addEventListener("paste", handlePaste);
-        return () => document.removeEventListener("paste", handlePaste);
-    }, []); // pas de dépendance sur activeExos — on utilise la ref
-
-    // Ref pour activeExos (évite le problème de closure dans les handlers)
-    const activeExosRef = useRef<ExtractedExo[]>([]);
-    useEffect(() => {
-        activeExosRef.current = activeExos;
-    }, [activeExos]);
-
-    // ── Upload image / capture ────────────────────────────────────────────────
-    const receiveCapture = async (file: File) => {
-        const userId = auth.currentUser?.uid;
-        if (!userId) {
-            addMsg("assistant", "❌ Vous devez être connecté pour utiliser l'assistant.");
-            return;
+    const redrawOverlay = useCallback((rect: SelRect) => {
+        const canvas = canvasRef.current;
+        const overlay = overlayRef.current;
+        if (!overlay || !canvas) return;
+        if (overlay.width !== canvas.width || overlay.height !== canvas.height) {
+            overlay.width = canvas.width;
+            overlay.height = canvas.height;
         }
+        const ctx = overlay.getContext("2d")!;
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(0, 0, overlay.width, overlay.height);
+        if (rect.w > 0 && rect.h > 0) ctx.clearRect(rect.x, rect.y, rect.w, rect.h);
+    }, []);
 
-        if (file.size > 5 * 1024 * 1024) {
-            addMsg("assistant", "❌ Image trop lourde (max 5MB).");
-            return;
-        }
-
-        // Aperçu immédiat
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const imagePreview = e.target?.result as string;
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: Date.now().toString(),
-                    role: "user",
-                    content: "",
-                    timestamp: new Date(),
-                    imagePreview,
-                },
-            ]);
-        };
-        reader.readAsDataURL(file);
-
-        setUploadingImage(true);
-
+    const renderPage = useCallback(async (pageNum: number, doc: any) => {
+        if (!doc) return;
+        if (isRenderingRef.current) { pendingPageRef.current = pageNum; return; }
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        if (renderTaskRef.current) { try { renderTaskRef.current.cancel(); } catch (_) { } renderTaskRef.current = null; }
+        isRenderingRef.current = true;
+        pendingPageRef.current = null;
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            const apiUrl = buildApiUrl(apiConfig.endpoints.assistant.extractExercise, {
-                user_id: userId,
-            });
-            const res = await fetch(apiUrl, { method: "POST", body: formData });
-
-            if (res.status === 429) {
-                const data = await res.json();
-                const hoursLeft = hoursUntilMidnight();
-                addMsg(
-                    "assistant",
-                    `🚫 Limite atteinte (${data.quota?.used}/${data.quota?.limit})\n\n⏰ Réinitialisation dans ${hoursLeft}h`
-                );
-                return;
-            }
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-            const data = await res.json();
-
-            if (data.success && data.exercise) {
-                const exo: ExtractedExo = {
-                    id: data.exercise.id,
-                    title: data.exercise.title,
-                    statement: data.exercise.statement,
-                    difficulty: data.exercise.difficulty,
-                    tags: data.exercise.tags,
-                };
-                setActiveExos((prev) => [...prev, exo]);
-
-                let content = `✅ **${data.exercise.title}**\n\n${data.exercise.statement}`;
-                if (data.exercise.questions?.length > 0) {
-                    content += `\n\n**Questions :**\n\n${data.exercise.questions
-                        .map((q: string, i: number) => `${i + 1}. ${q}`)
-                        .join("\n\n")}`;
-                }
-                if (data.exercise.warning) content += `\n\n⚠️ ${data.exercise.warning}`;
-
-                addMsg("assistant", content);
-            } else {
-                throw new Error(data.error || "Erreur extraction");
-            }
-        } catch (err) {
-            console.error(err);
-            addMsg("assistant", "❌ Impossible d'analyser l'image. Vérifiez que l'exercice est bien visible.");
+            const page = await doc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.8 });
+            const c = canvasRef.current;
+            if (!c) return;
+            c.width = viewport.width;
+            c.height = viewport.height;
+            const task = page.render({ canvasContext: c.getContext("2d")!, viewport });
+            renderTaskRef.current = task;
+            await task.promise;
+        } catch (err: any) {
+            if (err?.name !== "RenderingCancelledException") console.error("PDF render:", err);
         } finally {
-            setUploadingImage(false);
+            isRenderingRef.current = false;
+            renderTaskRef.current = null;
+            if (selModeRef.current) requestAnimationFrame(() => redrawOverlay(selRectRef.current));
+            if (pendingPageRef.current !== null) {
+                const next = pendingPageRef.current;
+                pendingPageRef.current = null;
+                renderPage(next, pdfDocRef.current);
+            }
+        }
+    }, [redrawOverlay]);
+
+    useEffect(() => { if (pdfDoc) renderPage(currentPage, pdfDoc); }, [pdfDoc, currentPage, renderPage]);
+
+    const loadPDF = async (file: File) => {
+        if (!pdfjsRef.current) return;
+        setPdfLoading(true);
+        setFileName(file.name);
+        exitSelection();
+        if (renderTaskRef.current) { try { renderTaskRef.current.cancel(); } catch (_) { } }
+        renderTaskRef.current = null;
+        isRenderingRef.current = false;
+        pendingPageRef.current = null;
+        try {
+            const buf = await file.arrayBuffer();
+            const doc = await pdfjsRef.current.getDocument({ data: buf }).promise;
+            setPdfDoc(doc);
+            setTotalPages(doc.numPages);
+            setCurrentPage(1);
+        } catch (err) {
+            console.error("Erreur PDF:", err);
+        } finally {
+            setPdfLoading(false);
         }
     };
 
-    // Exposer receiveCapture au parent via ref
-    useImperativeHandle(ref, () => ({ receiveCapture }), []);
+    const changePage = (n: number) => {
+        const c = Math.max(1, Math.min(totalPages, n));
+        if (c !== currentPage) setCurrentPage(c);
+    };
 
-    // ── Question texte ────────────────────────────────────────────────────────
-    const askAI = async () => {
-        if (!question.trim()) return;
-        const userId = auth.currentUser?.uid;
-        if (!userId) {
-            addMsg("assistant", "❌ Connexion requise.");
+    const enterSelection = () => {
+        const empty = { x: 0, y: 0, w: 0, h: 0 };
+        setSelRect(empty); selRectRef.current = empty;
+        setShowResolve(false); setSelMode(true); selModeRef.current = true;
+        requestAnimationFrame(() => redrawOverlay(empty));
+    };
+
+    const exitSelection = () => {
+        setSelMode(false); selModeRef.current = false;
+        setSelRect({ x: 0, y: 0, w: 0, h: 0 }); selRectRef.current = { x: 0, y: 0, w: 0, h: 0 };
+        setShowResolve(false);
+        isDraggingRef.current = false; isMovingRef.current = false; isResizingRef.current = false;
+    };
+
+    const getCanvasPos = (clientX: number, clientY: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+        const r = canvas.getBoundingClientRect();
+        return { x: (clientX - r.left) * (canvas.width / r.width), y: (clientY - r.top) * (canvas.height / r.height) };
+    };
+
+    const processDown = (clientX: number, clientY: number, target: EventTarget) => {
+        if (!selModeRef.current) return;
+        const handleEl = (target as HTMLElement).closest("[data-dir]") as HTMLElement | null;
+        if (handleEl) {
+            const pos = getCanvasPos(clientX, clientY);
+            isResizingRef.current = true;
+            resizeDirRef.current = handleEl.dataset.dir!;
+            resizeAnchorRef.current = { ...pos, rect: { ...selRectRef.current } };
             return;
         }
+        const pos = getCanvasPos(clientX, clientY);
+        const sr = selRectRef.current;
+        if (sr.w > 0 && sr.h > 0) {
+            const inside = pos.x >= sr.x && pos.x <= sr.x + sr.w && pos.y >= sr.y && pos.y <= sr.y + sr.h;
+            if (inside) { isMovingRef.current = true; moveOffsetRef.current = { x: pos.x - sr.x, y: pos.y - sr.y }; return; }
+        }
+        isDraggingRef.current = true;
+        selStartRef.current = pos;
+        const nr = { x: pos.x, y: pos.y, w: 0, h: 0 };
+        setSelRect(nr); selRectRef.current = nr; setShowResolve(false);
+    };
 
-        const userMsg: Message = {
-            id: Date.now().toString(),
-            role: "user",
-            content: question.trim(),
-            timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, userMsg]);
-        setQuestion("");
-        setLoading(true);
+    const processMove = (clientX: number, clientY: number) => {
+        if (!selModeRef.current) return;
+        if (!isDraggingRef.current && !isMovingRef.current && !isResizingRef.current) return;
+        const pos = getCanvasPos(clientX, clientY);
+        const canvas = canvasRef.current;
+        const maxW = canvas?.width ?? 800, maxH = canvas?.height ?? 1200;
+        let nr: SelRect | null = null;
+        if (isDraggingRef.current) {
+            const s = selStartRef.current;
+            nr = { x: Math.max(0, Math.min(pos.x, s.x)), y: Math.max(0, Math.min(pos.y, s.y)), w: Math.abs(pos.x - s.x), h: Math.abs(pos.y - s.y) };
+        }
+        if (isMovingRef.current) {
+            const sr = selRectRef.current;
+            nr = { ...sr, x: Math.max(0, Math.min(maxW - sr.w, pos.x - moveOffsetRef.current.x)), y: Math.max(0, Math.min(maxH - sr.h, pos.y - moveOffsetRef.current.y)) };
+        }
+        if (isResizingRef.current && resizeAnchorRef.current) {
+            const dx = pos.x - resizeAnchorRef.current.x, dy = pos.y - resizeAnchorRef.current.y;
+            const dir = resizeDirRef.current, r = { ...resizeAnchorRef.current.rect };
+            if (dir.includes("e")) r.w = Math.max(20, r.w + dx);
+            if (dir.includes("s")) r.h = Math.max(20, r.h + dy);
+            if (dir.includes("w")) { r.x += dx; r.w = Math.max(20, r.w - dx); }
+            if (dir.includes("n")) { r.y += dy; r.h = Math.max(20, r.h - dy); }
+            nr = r;
+        }
+        if (nr) { setSelRect(nr); selRectRef.current = nr; redrawOverlay(nr); }
+    };
 
-        try {
-            const params = new URLSearchParams({
-                user_id: userId,
-                question: userMsg.content,
-                user_level: "Terminal",
-                user_subject: "Maths",
-            });
-
-            // Historique conversation — depuis les messages actuels (pas dans setState)
-            const currentMessages = messagesRef.current;
-            const history = currentMessages
-                .filter((m) => !m.imagePreview)
-                .slice(-6)
-                .map((m) => `${m.role === "user" ? "Élève" : "Assistant"}: ${m.content}`)
-                .join("\n");
-            if (history) params.append("conversation_history", history);
-
-            // Exercices actifs extraits du PDF
-            const currentExos = activeExosRef.current;
-            if (currentExos.length > 0) {
-                params.append(
-                    "active_exercises",
-                    JSON.stringify(
-                        currentExos.map((ex) => ({
-                            id: ex.id,
-                            title: ex.title,
-                            statement: ex.statement || "",
-                            difficulty: ex.difficulty || "",
-                            tags: ex.tags?.join(", ") || "",
-                            source: "pdf",
-                        }))
-                    )
-                );
-            }
-
-            const apiUrl = buildApiUrl(
-                apiConfig.endpoints.assistant.exo,
-                Object.fromEntries(params)
-            );
-            const res = await fetch(apiUrl);
-
-            if (res.status === 429) {
-                const data = await res.json();
-                const hoursLeft = hoursUntilMidnight();
-                const minsLeft = minutesUntilMidnight();
-                addMsg(
-                    "assistant",
-                    `🚫 Limite quotidienne atteinte !\n\n⏰ Réinitialisation dans ${hoursLeft}h${minsLeft.toString().padStart(2, "0")}\n\n${data.quota?.plan === "gratuit" ? "🎯 Passez au plan Élève pour 150 questions/jour !" : ""}`
-                );
-                return;
-            }
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            addMsg("assistant", data.response || data.error || "Erreur.");
-        } catch (err) {
-            console.error(err);
-            addMsg("assistant", "❌ Erreur de connexion à l'assistant.");
-        } finally {
-            setLoading(false);
-            textareaRef.current?.focus();
+    const processUp = () => {
+        if (!selModeRef.current) return;
+        if (isDraggingRef.current || isMovingRef.current || isResizingRef.current) {
+            isDraggingRef.current = false; isMovingRef.current = false; isResizingRef.current = false;
+            const sr = selRectRef.current;
+            if (sr.w > 10 && sr.h > 10) setShowResolve(true);
         }
     };
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    const addMsg = (role: "user" | "assistant", content: string) => {
-        setMessages((prev) => [
-            ...prev,
-            { id: (Date.now() + Math.random()).toString(), role, content, timestamp: new Date() },
-        ]);
+    const onMouseDown = (e: React.MouseEvent) => { processDown(e.clientX, e.clientY, e.target); e.preventDefault(); };
+    const onMouseMove = (e: React.MouseEvent) => processMove(e.clientX, e.clientY);
+    const onTouchStart = (e: React.TouchEvent) => { const t = e.touches[0]; if (t) { processDown(t.clientX, t.clientY, e.target); if (selModeRef.current) e.preventDefault(); } };
+    const onTouchMove = (e: React.TouchEvent) => { const t = e.touches[0]; if (t) { processMove(t.clientX, t.clientY); if (selModeRef.current) e.preventDefault(); } };
+
+    const handleResolve = () => {
+        const sr = selRectRef.current;
+        const canvas = canvasRef.current;
+        if (!canvas || sr.w < 5 || sr.h < 5) return;
+        const cX = Math.max(0, sr.x), cY = Math.max(0, sr.y);
+        const cW = Math.min(sr.w, canvas.width - cX), cH = Math.min(sr.h, canvas.height - cY);
+        if (cW <= 0 || cH <= 0) return;
+        const out = document.createElement("canvas");
+        out.width = cW; out.height = cH;
+        out.getContext("2d")!.drawImage(canvas, cX, cY, cW, cH, 0, 0, cW, cH);
+        out.toBlob((blob) => {
+            if (!blob) return;
+            const file = new File([blob], `exo-p${currentPage}.png`, { type: "image/png" });
+            exitSelection();
+            // ── FIX 1 : on appelle via la ref — toujours à jour ────────────
+            imageHandlerRef.current?.(file);
+            setMobileTab("assistant");
+        }, "image/png");
     };
 
-    const hoursUntilMidnight = () => {
-        const now = new Date();
-        const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-        return Math.floor((midnight.getTime() - now.getTime()) / (1000 * 60 * 60));
+    const canvasToCss = (rect: SelRect): SelRect => {
+        const canvas = canvasRef.current;
+        if (!canvas || canvas.width === 0) return rect;
+        const r = canvas.getBoundingClientRect();
+        const sx = r.width / canvas.width, sy = r.height / canvas.height;
+        return { x: rect.x * sx, y: rect.y * sy, w: rect.w * sx, h: rect.h * sy };
     };
 
-    const minutesUntilMidnight = () => {
-        const now = new Date();
-        const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-        return Math.floor(((midnight.getTime() - now.getTime()) % (1000 * 60 * 60)) / (1000 * 60));
+    const handles = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+    const handleStyle = (dir: string): React.CSSProperties => {
+        const sz = 14, off = -7, mid = `calc(50% - 7px)`;
+        const base: React.CSSProperties = { position: "absolute", width: sz, height: sz, background: "#fff", border: "2px solid #3b82f6", borderRadius: "50%", zIndex: 5, touchAction: "none" };
+        const pos: Record<string, React.CSSProperties> = { nw: { top: off, left: off, cursor: "nw-resize" }, n: { top: off, left: mid, cursor: "n-resize" }, ne: { top: off, right: off, cursor: "ne-resize" }, e: { top: mid, right: off, cursor: "e-resize" }, se: { bottom: off, right: off, cursor: "se-resize" }, s: { bottom: off, left: mid, cursor: "s-resize" }, sw: { bottom: off, left: off, cursor: "sw-resize" }, w: { top: mid, left: off, cursor: "w-resize" } };
+        return { ...base, ...pos[dir] };
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            askAI();
-        }
-    };
+    const css = canvasToCss(selRect);
 
-    // ── Rendu ─────────────────────────────────────────────────────────────────
+    const pdfZoneStyle: React.CSSProperties = isDesktop
+        ? { flex: 1, minWidth: 0 }
+        : mobileTab === "pdf"
+            ? { flex: 1, minWidth: 0 }
+            : { position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", zIndex: -1 };
+
+    const assistantStyle: React.CSSProperties = isDesktop
+        ? { width: 380, flexShrink: 0 }
+        : mobileTab === "assistant"
+            ? { position: "absolute", inset: 0, zIndex: 10 }
+            : { position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", zIndex: -1 };
+
     return (
-        <div className="h-full flex flex-col bg-white">
-            {/* Header */}
-            <div className="px-4 py-3 border-b bg-gradient-to-r from-green-50 to-emerald-100 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-green-900">🤖 Assistant IA</span>
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full font-medium">
-                        PDF
-                    </span>
-                </div>
-                <p className="text-xs text-green-700 mt-0.5">
-                    Sélectionne une zone dans le PDF → Résoudre
-                </p>
+        <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
 
-                {/* Exercices extraits actifs */}
-                {activeExos.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                        {activeExos.slice(0, 3).map((ex) => (
-                            <div
-                                key={ex.id}
-                                className="flex items-center gap-1 bg-white border border-green-200 px-2 py-0.5 rounded-full text-xs text-gray-700"
-                            >
-                                <span className="text-purple-500">📄</span>
-                                <span className="truncate max-w-[100px]">{ex.title}</span>
-                                <button
-                                    onClick={() =>
-                                        setActiveExos((prev) => prev.filter((e) => e.id !== ex.id))
-                                    }
-                                    className="text-red-400 hover:text-red-600 ml-0.5"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
-                        {activeExos.length > 3 && (
-                            <span className="text-xs text-gray-400">+{activeExos.length - 3}</span>
-                        )}
-                    </div>
-                )}
+            {/* ── Top bar ── */}
+            <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-white border-b shadow-sm flex-shrink-0">
+                {/* FIX 2 : useRouter au lieu de <Link> — navigation immédiate sans attendre le fetch */}
+                <button
+                    onClick={() => router.push("/exercices")}
+                    className="flex items-center gap-1 md:gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition flex-shrink-0"
+                >
+                    <ArrowLeft size={16} /><span className="hidden sm:inline">Exercices</span>
+                </button>
+                <div className="w-px h-4 bg-gray-200 hidden sm:block" />
+                <span className="text-sm font-semibold text-gray-700 truncate flex-1 min-w-0">{fileName || "Maths PDF"}</span>
+                <button onClick={() => fileInputRef.current?.click()} className="text-xs md:text-sm px-2.5 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium flex-shrink-0">
+                    <span className="hidden sm:inline">Charger un PDF</span>
+                    <span className="sm:hidden">PDF</span>
+                </button>
+                <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) loadPDF(f); e.target.value = ""; }} />
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4">
-                {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-4 text-gray-400">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-200 flex items-center justify-center text-3xl mb-4">
-                            📐
+            {/* ── Corps ── */}
+            <div className="flex flex-1 overflow-hidden relative">
+
+                {/* Zone PDF — canvas toujours dans le DOM */}
+                <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-gray-200" style={pdfZoneStyle}>
+                    {pdfDoc && (
+                        <div className="flex items-center justify-between px-3 md:px-4 py-2 bg-white border-b flex-shrink-0">
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => changePage(currentPage - 1)} disabled={currentPage <= 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronLeft size={18} /></button>
+                                <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <input type="number" min={1} max={totalPages} value={currentPage}
+                                        onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) changePage(v); }}
+                                        className="w-10 md:w-12 text-center border border-gray-300 rounded-md py-0.5 text-sm focus:outline-none focus:border-blue-500" />
+                                    <span>/ {totalPages}</span>
+                                </div>
+                                <button onClick={() => changePage(currentPage + 1)} disabled={currentPage >= totalPages} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronRight size={18} /></button>
+                            </div>
+                            <button onClick={() => selMode ? exitSelection() : enterSelection()}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition ${selMode ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+                                {selMode ? <><X size={13} /> Annuler</> : <><Crop size={13} /> Sélectionner</>}
+                            </button>
                         </div>
-                        <p className="text-sm font-medium text-gray-600 mb-1">
-                            Sélectionne un exercice dans le PDF
-                        </p>
-                        <p className="text-xs text-gray-400">
-                            Clique sur <strong>Sélectionner</strong>, trace une zone,
-                            puis <strong>Résoudre</strong>
-                        </p>
-                        <div className="mt-4 text-xs text-gray-400 space-y-1">
-                            <p>💡 Tu peux aussi :</p>
-                            <p>• Envoyer une photo de ta feuille</p>
-                            <p>• Coller une image (Ctrl+V)</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {messages.map((msg) => (
+                    )}
+
+                    <div className="flex-1 overflow-auto flex justify-center" style={{ padding: pdfDoc ? "24px" : 0 }}>
+                        {!pdfDoc && !pdfLoading && (
+                            <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
+                                <div className="text-5xl">📄</div>
+                                <p className="text-base font-medium">Charge un PDF pour commencer</p>
+                                <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition text-sm">Choisir un PDF</button>
+                            </div>
+                        )}
+                        {pdfLoading && (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="flex flex-col items-center gap-3 text-gray-500">
+                                    <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                                    <p className="text-sm">Chargement…</p>
+                                </div>
+                            </div>
+                        )}
+                        {pdfDoc && (
                             <div
-                                key={msg.id}
-                                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                className="relative select-none"
+                                style={{ alignSelf: "flex-start", cursor: selMode ? "crosshair" : "default", touchAction: selMode ? "none" : "auto" }}
+                                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={processUp} onMouseLeave={processUp}
+                                onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={processUp}
                             >
-                                <div
-                                    className={`max-w-[88%] rounded-2xl px-4 py-3 ${msg.role === "user"
-                                        ? "bg-green-600 text-white"
-                                        : "bg-gray-100 text-gray-800"
-                                        }`}
-                                >
-                                    {msg.role === "assistant" && (
-                                        <p className="text-xs font-semibold text-green-700 mb-1.5">
-                                            🤖 Assistant
-                                        </p>
-                                    )}
-                                    {msg.imagePreview && (
-                                        <img
-                                            src={msg.imagePreview}
-                                            alt="Capture PDF"
-                                            className="max-w-full rounded-lg border-2 border-white/30 shadow mb-2"
-                                            style={{ maxHeight: 260 }}
-                                        />
-                                    )}
-                                    {msg.content && (
-                                        <div className="leading-relaxed">
-                                            {renderContent(msg.content)}
+                                <canvas ref={canvasRef} className="block shadow-xl rounded" style={{ maxWidth: "100%" }} />
+                                {selMode && (
+                                    <canvas ref={overlayRef} className="absolute inset-0 rounded"
+                                        style={{ width: "100%", height: "100%", pointerEvents: "none" }} />
+                                )}
+                                {selMode && selRect.w > 0 && selRect.h > 0 && (
+                                    <div style={{ position: "absolute", left: css.x, top: css.y, width: css.w, height: css.h, border: "2px solid #3b82f6", cursor: "move", pointerEvents: "all", zIndex: 10, boxSizing: "border-box" }}>
+                                        <div style={{ position: "absolute", top: -24, left: 0, background: "#3b82f6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none" }}>
+                                            {Math.round(css.w)} × {Math.round(css.h)}
                                         </div>
-                                    )}
-                                    <span className="text-xs opacity-60 mt-1.5 block">
-                                        {msg.timestamp.toLocaleTimeString("fr-FR", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                        })}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-
-                        {(loading || uploadingImage) && (
-                            <div className="flex justify-start">
-                                <div className="bg-gray-100 rounded-2xl px-4 py-3">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                                        <div
-                                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                                            style={{ animationDelay: "0.1s" }}
-                                        />
-                                        <div
-                                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                                            style={{ animationDelay: "0.2s" }}
-                                        />
-                                        <span className="text-xs text-gray-500 ml-1">
-                                            {uploadingImage ? "Analyse…" : "Réflexion…"}
-                                        </span>
+                                        {handles.map((dir) => <div key={dir} style={handleStyle(dir)} data-dir={dir} />)}
+                                        {showResolve && (
+                                            <div style={{ position: "absolute", top: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8, pointerEvents: "all", zIndex: 30, whiteSpace: "nowrap" }}
+                                                onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                                <button onClick={(e) => { e.stopPropagation(); handleResolve(); }}
+                                                    style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 16px rgba(34,197,94,0.45)", display: "flex", alignItems: "center", gap: 6 }}>
+                                                    ✓ Résoudre
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); exitSelection(); }}
+                                                    style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(30,30,30,0.75)", border: "1.5px solid rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
+                                {selMode && selRect.w === 0 && (
+                                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 500, pointerEvents: "none", textAlign: "center", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+                                        Cliquez et faites glisser pour sélectionner
+                                    </div>
+                                )}
                             </div>
                         )}
-
-                        <div ref={messagesEndRef} />
                     </div>
-                )}
+                </div>
+
+                {/* Assistant — toujours monté, jamais démonté */}
+                <div className="flex flex-col bg-white overflow-hidden" style={assistantStyle}>
+                    <ExoAssistantPanel
+                        onClose={handleAssistantClose}
+                        onImageCapture={handleImageCapture}
+                    />
+                </div>
             </div>
 
-            {/* Saisie */}
-            <div className="border-t bg-white p-3 flex-shrink-0">
-                <div className="flex items-end gap-2">
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) receiveCapture(f);
-                            e.target.value = "";
-                        }}
-                    />
+            {/* Tab bar mobile */}
+            {!isDesktop && (
+                <div className="flex flex-shrink-0 bg-white border-t border-gray-200">
                     <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={loading || uploadingImage}
-                        className="p-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition disabled:opacity-50 flex-shrink-0"
-                        title="Envoyer une photo"
+                        onClick={() => setMobileTab("pdf")}
+                        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "pdf" ? "text-blue-600 border-t-2 border-blue-600 -mt-px" : "text-gray-500"}`}
                     >
-                        <Camera size={18} />
+                        <FileText size={20} /><span>PDF</span>
                     </button>
-                    <textarea
-                        ref={textareaRef}
-                        rows={1}
-                        className="flex-1 border-2 border-gray-200 focus:border-green-500 p-2.5 rounded-xl resize-none focus:outline-none text-sm transition"
-                        placeholder="Pose ta question sur l'exercice…"
-                        value={question}
-                        onChange={(e) => {
-                            setQuestion(e.target.value);
-                            e.target.style.height = "auto";
-                            e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
-                        }}
-                        onKeyDown={handleKeyDown}
-                        disabled={loading || uploadingImage}
-                    />
                     <button
-                        onClick={askAI}
-                        disabled={loading || uploadingImage || !question.trim()}
-                        className="p-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl disabled:opacity-50 transition flex-shrink-0"
+                        onClick={() => setMobileTab("assistant")}
+                        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "assistant" ? "text-teal-600 border-t-2 border-teal-600 -mt-px" : "text-gray-500"}`}
                     >
-                        <Send size={18} />
+                        <Bot size={20} /><span>Assistant</span>
                     </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5 text-center">
-                    <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs border">Entrée</kbd> pour envoyer
-                    {" · "}
-                    <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs border">Ctrl+V</kbd> pour coller
-                </p>
-            </div>
+            )}
         </div>
     );
-});
-
-PdfAssistantPanel.displayName = "PdfAssistantPanel";
-export default PdfAssistantPanel;
+}

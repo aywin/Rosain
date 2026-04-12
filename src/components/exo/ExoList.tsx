@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { db } from "@/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import ExoSidebar from "./ExoSidebar";
@@ -99,27 +99,38 @@ export default function ExoList() {
     setSelectedExerciseIds(prev => { const s = new Set(prev); s.add(exoContext.id); return s; });
   };
 
-  const selectedExercises = exos
-    .filter(exo => selectedExerciseIds.has(exo.id))
-    .map(exo => {
-      const level = levels.find(l => l.id === exo.level_id);
-      const subject = subjects.find(s => s.id === exo.subject_id);
-      const exoCourseIds = exo.course_ids || (exo.course_id ? [exo.course_id] : []);
-      const exoCourses = courses.filter(c => exoCourseIds.includes(c.id)).map(c => c.title);
-      return {
-        id: exo.id, title: exo.title,
-        statement: exo.statement_text, solution: exo.solution_text,
-        difficulty: exo.difficulty, tags: exo.tags,
-        level: level?.name, subject: subject?.name,
-        order: exo.order, courses: exoCourses,
-        isMultiCourse: exoCourseIds.length > 1,
-        source: "platform" as const,
-      };
-    });
+  // ── FIX : useMemo pour éviter de recréer le tableau à chaque render ──────────
+  // Sans useMemo, selectedExercises est un nouveau tableau à chaque render,
+  // ce qui déclenche la boucle infinie dans ExoAssistantPanel via
+  // l'useEffect qui surveille initialActiveExercises.
+  const selectedExercises = useMemo(() =>
+    exos
+      .filter(exo => selectedExerciseIds.has(exo.id))
+      .map(exo => {
+        const level = levels.find(l => l.id === exo.level_id);
+        const subject = subjects.find(s => s.id === exo.subject_id);
+        const exoCourseIds = exo.course_ids || (exo.course_id ? [exo.course_id] : []);
+        const exoCourses = courses.filter(c => exoCourseIds.includes(c.id)).map(c => c.title);
+        return {
+          id: exo.id, title: exo.title,
+          statement: exo.statement_text, solution: exo.solution_text,
+          difficulty: exo.difficulty, tags: exo.tags,
+          level: level?.name, subject: subject?.name,
+          order: exo.order, courses: exoCourses,
+          isMultiCourse: exoCourseIds.length > 1,
+          source: "platform" as const,
+        };
+      }),
+    [exos, selectedExerciseIds, levels, subjects, courses]
+  );
 
-  const updateActiveExercises = (exercises: any[]) => {
+  // ── FIX : useCallback pour stabiliser la référence ───────────────────────────
+  // Sans useCallback, updateActiveExercises est recréée à chaque render,
+  // ce qui est passé comme onExercisesChange → recrée handleImageUpload
+  // → re-déclenche l'useEffect onImageCapture → boucle infinie.
+  const updateActiveExercises = useCallback((exercises: any[]) => {
     setSelectedExerciseIds(new Set(exercises.map(ex => ex.id)));
-  };
+  }, []);
 
   const filteredCourses = courses.filter(
     c => (!levelId || c.level_id === levelId) && (!subjectId || c.subject_id === subjectId)
@@ -136,7 +147,6 @@ export default function ExoList() {
       : courseIds.every(id => exoCourseIds.includes(id));
   }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-  // Resize assistant
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e: MouseEvent) =>
@@ -158,7 +168,6 @@ export default function ExoList() {
     );
   }
 
-  // ── Panel assistant — instance UNIQUE partagée desktop + mobile ──────────────
   const assistantPanel = showAssistant ? (
     <ExoAssistantPanel
       onClose={() => { setShowAssistant(false); setCurrentExoContext(null); }}
@@ -173,44 +182,25 @@ export default function ExoList() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
 
-      {/* ── Sidebar desktop ── */}
       <div className="hidden md:flex flex-col h-full">
         <ExoSidebar
-          levels={levels}
-          subjects={subjects}
-          courses={filteredCourses}
-          levelId={levelId}
-          subjectId={subjectId}
-          courseIds={courseIds}
-          setLevelId={setLevelId}
-          setSubjectId={setSubjectId}
-          setCourseIds={setCourseIds}
-          filterMode={filterMode}
-          setFilterMode={setFilterMode}
+          levels={levels} subjects={subjects} courses={filteredCourses}
+          levelId={levelId} subjectId={subjectId} courseIds={courseIds}
+          setLevelId={setLevelId} setSubjectId={setSubjectId} setCourseIds={setCourseIds}
+          filterMode={filterMode} setFilterMode={setFilterMode}
           exerciseCount={filteredExos.length}
         />
       </div>
 
-      {/* ── Contenu principal scrollable ── */}
       <div className="flex-1 overflow-y-auto">
-
-        {/* ── Drawer mobile ── */}
         <ExoMobileDrawer
-          levels={levels}
-          subjects={subjects}
-          courses={filteredCourses}
-          levelId={levelId}
-          subjectId={subjectId}
-          courseIds={courseIds}
-          setLevelId={setLevelId}
-          setSubjectId={setSubjectId}
-          setCourseIds={setCourseIds}
-          filterMode={filterMode}
-          setFilterMode={setFilterMode}
+          levels={levels} subjects={subjects} courses={filteredCourses}
+          levelId={levelId} subjectId={subjectId} courseIds={courseIds}
+          setLevelId={setLevelId} setSubjectId={setSubjectId} setCourseIds={setCourseIds}
+          filterMode={filterMode} setFilterMode={setFilterMode}
           exerciseCount={filteredExos.length}
         />
 
-        {/* Liste exercices */}
         <div className="max-w-4xl mx-auto px-3 md:px-6 py-6 pb-24">
           {filteredExos.length === 0 ? (
             <div className="text-center py-16">
@@ -233,20 +223,15 @@ export default function ExoList() {
                     <div key={course.id} className="space-y-4">
                       <h3 className="text-lg font-bold text-gray-800 border-b-2 border-blue-500 pb-2 flex items-center justify-between">
                         <span>{course.title}</span>
-                        <span className="text-sm font-normal text-gray-500">
-                          {courseExos.length} exercice{courseExos.length > 1 ? "s" : ""}
-                        </span>
+                        <span className="text-sm font-normal text-gray-500">{courseExos.length} exercice{courseExos.length > 1 ? "s" : ""}</span>
                       </h3>
                       {courseExos.map(exo => (
-                        <ExoCard
-                          key={exo.id} exo={exo}
-                          levels={levels} subjects={subjects} courses={courses}
+                        <ExoCard key={exo.id} exo={exo} levels={levels} subjects={subjects} courses={courses}
                           openStatementIds={openStatementIds} openSolutionIds={openSolutionIds}
                           toggleStatement={toggleStatement} toggleSolution={toggleSolution}
                           onAssistantClick={handleAssistantClick}
                           isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
-                          onToggleSelection={toggleExerciseSelection}
-                        />
+                          onToggleSelection={toggleExerciseSelection} />
                       ))}
                     </div>
                   );
@@ -260,22 +245,17 @@ export default function ExoList() {
                         : `${filteredExos.length} exercice${filteredExos.length > 1 ? "s" : ""} trouvé${filteredExos.length > 1 ? "s" : ""}`}
                     </h3>
                     {filterMode === "all" && courseIds.length > 1 && (
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">
-                        🔗 Multi-thématiques
-                      </span>
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">🔗 Multi-thématiques</span>
                     )}
                   </div>
                   <div className="space-y-4">
                     {filteredExos.map(exo => (
-                      <ExoCard
-                        key={exo.id} exo={exo}
-                        levels={levels} subjects={subjects} courses={courses}
+                      <ExoCard key={exo.id} exo={exo} levels={levels} subjects={subjects} courses={courses}
                         openStatementIds={openStatementIds} openSolutionIds={openSolutionIds}
                         toggleStatement={toggleStatement} toggleSolution={toggleSolution}
                         onAssistantClick={handleAssistantClick}
                         isSelectedForAssistant={selectedExerciseIds.has(exo.id)}
-                        onToggleSelection={toggleExerciseSelection}
-                      />
+                        onToggleSelection={toggleExerciseSelection} />
                     ))}
                   </div>
                 </>
@@ -285,72 +265,45 @@ export default function ExoList() {
         </div>
       </div>
 
-      {/* ── Bouton assistant flottant (desktop) ── */}
       {!showAssistant && (
-        <button
-          onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
-          className="hidden md:flex fixed bottom-8 right-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full px-5 py-3.5 shadow-2xl transition-all hover:scale-105 z-40 items-center gap-2.5"
-        >
+        <button onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
+          className="hidden md:flex fixed bottom-8 right-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full px-5 py-3.5 shadow-2xl transition-all hover:scale-105 z-40 items-center gap-2.5">
           <FaRobot className="text-xl" />
           <span className="font-semibold text-sm">Assistant IA</span>
           {selectedExerciseIds.size > 0 && (
-            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow">
-              {selectedExerciseIds.size}
-            </span>
+            <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow">{selectedExerciseIds.size}</span>
           )}
         </button>
       )}
 
-      {/* ── Bouton assistant flottant (mobile) ── */}
       {!showAssistant && (
-        <button
-          onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
-          className="md:hidden fixed bottom-4 right-4 bg-teal-700 text-white rounded-full w-14 h-14 shadow-2xl z-40 flex items-center justify-center"
-        >
+        <button onClick={() => { setCurrentExoContext(null); setShowAssistant(true); }}
+          className="md:hidden fixed bottom-4 right-4 bg-teal-700 text-white rounded-full w-14 h-14 shadow-2xl z-40 flex items-center justify-center">
           <FaRobot className="text-xl" />
           {selectedExerciseIds.size > 0 && (
-            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
-              {selectedExerciseIds.size}
-            </span>
+            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">{selectedExerciseIds.size}</span>
           )}
         </button>
       )}
 
-      {/* ── Assistant desktop — panel latéral resizable ── */}
       {showAssistant && (
-        <div
-          className="hidden md:block fixed right-0 top-0 h-full bg-white shadow-2xl z-50 border-l"
-          style={{ width: `${assistantWidth}px` }}
-        >
-          {/* Handle resize */}
-          <div
-            className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-teal-400 transition-colors group z-10"
-            onMouseDown={() => setIsResizing(true)}
-          >
+        <div className="hidden md:block fixed right-0 top-0 h-full bg-white shadow-2xl z-50 border-l" style={{ width: `${assistantWidth}px` }}>
+          <div className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-teal-400 transition-colors group z-10" onMouseDown={() => setIsResizing(true)}>
             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-16 bg-gray-200 group-hover:bg-teal-400 rounded-r transition" />
           </div>
           {assistantPanel}
         </div>
       )}
 
-      {/* ── Assistant mobile — plein écran ── */}
       {showAssistant && (
         <div className="md:hidden fixed inset-0 bg-white z-50 flex flex-col">
           <div className="bg-teal-700 text-white px-4 py-3 flex items-center justify-between shadow-md flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <FaRobot className="text-xl" />
-              <h2 className="font-semibold text-lg">Assistant IA</h2>
-            </div>
-            <button
-              onClick={() => { setShowAssistant(false); setCurrentExoContext(null); }}
-              className="p-2 hover:bg-teal-800 rounded-full transition"
-            >
+            <div className="flex items-center gap-3"><FaRobot className="text-xl" /><h2 className="font-semibold text-lg">Assistant IA</h2></div>
+            <button onClick={() => { setShowAssistant(false); setCurrentExoContext(null); }} className="p-2 hover:bg-teal-800 rounded-full transition">
               <FaTimes className="text-xl" />
             </button>
           </div>
-          <div className="flex-1 overflow-hidden">
-            {assistantPanel}
-          </div>
+          <div className="flex-1 overflow-hidden">{assistantPanel}</div>
         </div>
       )}
     </div>

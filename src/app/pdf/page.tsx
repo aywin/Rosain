@@ -1,22 +1,16 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Crop, X, FileText, Bot } from "lucide-react";
-import { MathJaxContext } from "better-react-mathjax";
+// MathJaxContext retiré — déjà monté dans layout.tsx, double montage causait des conflits
 import ExoAssistantPanel from "@/components/exo/ExoAssistantPanel";
-
-const mathJaxConfig = {
-    loader: { load: ["input/tex", "output/chtml"] },
-    tex: {
-        inlineMath: [["\\(", "\\)"], ["$", "$"]],
-        displayMath: [["\\[", "\\]"], ["$$", "$$"]],
-    },
-};
 
 interface SelRect { x: number; y: number; w: number; h: number; }
 type MobileTab = "pdf" | "assistant";
 
 export default function PdfPage() {
+    const router = useRouter();
+
     const [pdfDoc, setPdfDoc] = useState<any>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
@@ -28,8 +22,14 @@ export default function PdfPage() {
     const [mobileTab, setMobileTab] = useState<MobileTab>("pdf");
     const [isDesktop, setIsDesktop] = useState(true);
 
-    // Remplace assistantRef — on stocke le handler exposé par ExoAssistantPanel via onImageCapture
-    const [imageHandler, setImageHandler] = useState<((file: File) => void) | null>(null);
+    // ── FIX 1 : ref stable pour le handler image (évite closure stale) ─────────
+    // On stocke le handler dans une ref plutôt qu'un useState.
+    // Ainsi imageHandlerRef.current pointe toujours vers la dernière version
+    // de handleImageUpload dans ExoAssistantPanel, même après re-renders.
+    const imageHandlerRef = useRef<((file: File) => void) | null>(null);
+    const handleImageCapture = useCallback((handler: (file: File) => void) => {
+        imageHandlerRef.current = handler;
+    }, []); // stable — ne provoque pas de re-renders
 
     useEffect(() => {
         const mq = window.matchMedia("(min-width: 768px)");
@@ -244,8 +244,8 @@ export default function PdfPage() {
             if (!blob) return;
             const file = new File([blob], `exo-p${currentPage}.png`, { type: "image/png" });
             exitSelection();
-            // Envoyer l'image au handler exposé par ExoAssistantPanel via onImageCapture
-            imageHandler?.(file);
+            // ── FIX 1 : on appelle via la ref — toujours à jour ────────────
+            imageHandlerRef.current?.(file);
             setMobileTab("assistant");
         }, "image/png");
     };
@@ -281,136 +281,136 @@ export default function PdfPage() {
             : { position: "absolute", width: "1px", height: "1px", overflow: "hidden", opacity: 0, pointerEvents: "none", zIndex: -1 };
 
     return (
-        <MathJaxContext config={mathJaxConfig}>
-            <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
+        <div className="h-screen flex flex-col bg-gray-100 overflow-hidden">
 
-                {/* Top bar */}
-                <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-white border-b shadow-sm flex-shrink-0">
-                    <Link href="/exercices" className="flex items-center gap-1 md:gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition flex-shrink-0">
-                        <ArrowLeft size={16} /><span className="hidden sm:inline">Exercices</span>
-                    </Link>
-                    <div className="w-px h-4 bg-gray-200 hidden sm:block" />
-                    <span className="text-sm font-semibold text-gray-700 truncate flex-1 min-w-0">{fileName || "Maths PDF"}</span>
-                    <button onClick={() => fileInputRef.current?.click()} className="text-xs md:text-sm px-2.5 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium flex-shrink-0">
-                        <span className="hidden sm:inline">Charger un PDF</span>
-                        <span className="sm:hidden">PDF</span>
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) loadPDF(f); e.target.value = ""; }} />
-                </div>
+            {/* ── Top bar ── */}
+            <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-white border-b shadow-sm flex-shrink-0">
+                {/* FIX 2 : useRouter au lieu de <Link> — navigation immédiate sans attendre le fetch */}
+                <button
+                    onClick={() => router.push("/exercices")}
+                    className="flex items-center gap-1 md:gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition flex-shrink-0"
+                >
+                    <ArrowLeft size={16} /><span className="hidden sm:inline">Exercices</span>
+                </button>
+                <div className="w-px h-4 bg-gray-200 hidden sm:block" />
+                <span className="text-sm font-semibold text-gray-700 truncate flex-1 min-w-0">{fileName || "Maths PDF"}</span>
+                <button onClick={() => fileInputRef.current?.click()} className="text-xs md:text-sm px-2.5 md:px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium flex-shrink-0">
+                    <span className="hidden sm:inline">Charger un PDF</span>
+                    <span className="sm:hidden">PDF</span>
+                </button>
+                <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) loadPDF(f); e.target.value = ""; }} />
+            </div>
 
-                {/* Corps */}
-                <div className="flex flex-1 overflow-hidden relative">
+            {/* ── Corps ── */}
+            <div className="flex flex-1 overflow-hidden relative">
 
-                    {/* Zone PDF */}
-                    <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-gray-200" style={pdfZoneStyle}>
-                        {pdfDoc && (
-                            <div className="flex items-center justify-between px-3 md:px-4 py-2 bg-white border-b flex-shrink-0">
-                                <div className="flex items-center gap-1.5">
-                                    <button onClick={() => changePage(currentPage - 1)} disabled={currentPage <= 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronLeft size={18} /></button>
-                                    <div className="flex items-center gap-1 text-sm text-gray-600">
-                                        <input type="number" min={1} max={totalPages} value={currentPage}
-                                            onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) changePage(v); }}
-                                            className="w-10 md:w-12 text-center border border-gray-300 rounded-md py-0.5 text-sm focus:outline-none focus:border-blue-500" />
-                                        <span>/ {totalPages}</span>
-                                    </div>
-                                    <button onClick={() => changePage(currentPage + 1)} disabled={currentPage >= totalPages} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronRight size={18} /></button>
+                {/* Zone PDF — canvas toujours dans le DOM */}
+                <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-gray-200" style={pdfZoneStyle}>
+                    {pdfDoc && (
+                        <div className="flex items-center justify-between px-3 md:px-4 py-2 bg-white border-b flex-shrink-0">
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => changePage(currentPage - 1)} disabled={currentPage <= 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronLeft size={18} /></button>
+                                <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <input type="number" min={1} max={totalPages} value={currentPage}
+                                        onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) changePage(v); }}
+                                        className="w-10 md:w-12 text-center border border-gray-300 rounded-md py-0.5 text-sm focus:outline-none focus:border-blue-500" />
+                                    <span>/ {totalPages}</span>
                                 </div>
-                                <button onClick={() => selMode ? exitSelection() : enterSelection()}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition ${selMode ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
-                                    {selMode ? <><X size={13} /> Annuler</> : <><Crop size={13} /> Sélectionner</>}
-                                </button>
+                                <button onClick={() => changePage(currentPage + 1)} disabled={currentPage >= totalPages} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 transition"><ChevronRight size={18} /></button>
+                            </div>
+                            <button onClick={() => selMode ? exitSelection() : enterSelection()}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition ${selMode ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}>
+                                {selMode ? <><X size={13} /> Annuler</> : <><Crop size={13} /> Sélectionner</>}
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-auto flex justify-center" style={{ padding: pdfDoc ? "24px" : 0 }}>
+                        {!pdfDoc && !pdfLoading && (
+                            <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
+                                <div className="text-5xl">📄</div>
+                                <p className="text-base font-medium">Charge un PDF pour commencer</p>
+                                <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition text-sm">Choisir un PDF</button>
                             </div>
                         )}
-
-                        <div className="flex-1 overflow-auto flex justify-center" style={{ padding: pdfDoc ? "24px" : 0 }}>
-                            {!pdfDoc && !pdfLoading && (
-                                <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
-                                    <div className="text-5xl">📄</div>
-                                    <p className="text-base font-medium">Charge un PDF pour commencer</p>
-                                    <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition text-sm">Choisir un PDF</button>
+                        {pdfLoading && (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="flex flex-col items-center gap-3 text-gray-500">
+                                    <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                                    <p className="text-sm">Chargement…</p>
                                 </div>
-                            )}
-                            {pdfLoading && (
-                                <div className="flex items-center justify-center h-full">
-                                    <div className="flex flex-col items-center gap-3 text-gray-500">
-                                        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-                                        <p className="text-sm">Chargement…</p>
-                                    </div>
-                                </div>
-                            )}
-                            {pdfDoc && (
-                                <div
-                                    className="relative select-none"
-                                    style={{ alignSelf: "flex-start", cursor: selMode ? "crosshair" : "default", touchAction: selMode ? "none" : "auto" }}
-                                    onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={processUp} onMouseLeave={processUp}
-                                    onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={processUp}
-                                >
-                                    <canvas ref={canvasRef} className="block shadow-xl rounded" style={{ maxWidth: "100%" }} />
-                                    {selMode && (
-                                        <canvas ref={overlayRef} className="absolute inset-0 rounded"
-                                            style={{ width: "100%", height: "100%", pointerEvents: "none" }} />
-                                    )}
-                                    {selMode && selRect.w > 0 && selRect.h > 0 && (
-                                        <div style={{ position: "absolute", left: css.x, top: css.y, width: css.w, height: css.h, border: "2px solid #3b82f6", cursor: "move", pointerEvents: "all", zIndex: 10, boxSizing: "border-box" }}>
-                                            <div style={{ position: "absolute", top: -24, left: 0, background: "#3b82f6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none" }}>
-                                                {Math.round(css.w)} × {Math.round(css.h)}
+                            </div>
+                        )}
+                        {pdfDoc && (
+                            <div
+                                className="relative select-none"
+                                style={{ alignSelf: "flex-start", cursor: selMode ? "crosshair" : "default", touchAction: selMode ? "none" : "auto" }}
+                                onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={processUp} onMouseLeave={processUp}
+                                onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={processUp}
+                            >
+                                <canvas ref={canvasRef} className="block shadow-xl rounded" style={{ maxWidth: "100%" }} />
+                                {selMode && (
+                                    <canvas ref={overlayRef} className="absolute inset-0 rounded"
+                                        style={{ width: "100%", height: "100%", pointerEvents: "none" }} />
+                                )}
+                                {selMode && selRect.w > 0 && selRect.h > 0 && (
+                                    <div style={{ position: "absolute", left: css.x, top: css.y, width: css.w, height: css.h, border: "2px solid #3b82f6", cursor: "move", pointerEvents: "all", zIndex: 10, boxSizing: "border-box" }}>
+                                        <div style={{ position: "absolute", top: -24, left: 0, background: "#3b82f6", color: "#fff", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", pointerEvents: "none" }}>
+                                            {Math.round(css.w)} × {Math.round(css.h)}
+                                        </div>
+                                        {handles.map((dir) => <div key={dir} style={handleStyle(dir)} data-dir={dir} />)}
+                                        {showResolve && (
+                                            <div style={{ position: "absolute", top: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8, pointerEvents: "all", zIndex: 30, whiteSpace: "nowrap" }}
+                                                onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                                <button onClick={(e) => { e.stopPropagation(); handleResolve(); }}
+                                                    style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 16px rgba(34,197,94,0.45)", display: "flex", alignItems: "center", gap: 6 }}>
+                                                    ✓ Résoudre
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); exitSelection(); }}
+                                                    style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(30,30,30,0.75)", border: "1.5px solid rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
+                                                    <X size={14} />
+                                                </button>
                                             </div>
-                                            {handles.map((dir) => <div key={dir} style={handleStyle(dir)} data-dir={dir} />)}
-                                            {showResolve && (
-                                                <div style={{ position: "absolute", top: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8, pointerEvents: "all", zIndex: 30, whiteSpace: "nowrap" }}
-                                                    onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleResolve(); }}
-                                                        style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 16px rgba(34,197,94,0.45)", display: "flex", alignItems: "center", gap: 6 }}>
-                                                        ✓ Résoudre
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); exitSelection(); }}
-                                                        style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(30,30,30,0.75)", border: "1.5px solid rgba(255,255,255,0.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>
-                                                        <X size={14} />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    {selMode && selRect.w === 0 && (
-                                        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 500, pointerEvents: "none", textAlign: "center", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
-                                            Cliquez et faites glisser pour sélectionner
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                                        )}
+                                    </div>
+                                )}
+                                {selMode && selRect.w === 0 && (
+                                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", color: "rgba(255,255,255,0.85)", fontSize: 14, fontWeight: 500, pointerEvents: "none", textAlign: "center", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+                                        Cliquez et faites glisser pour sélectionner
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
-
-                    {/* Assistant — ExoAssistantPanel remplace PdfAssistantPanel */}
-                    <div className="flex flex-col bg-white overflow-hidden" style={assistantStyle}>
-                        <ExoAssistantPanel
-                            onClose={() => { }}
-                            onImageCapture={(handler) => setImageHandler(() => handler)}
-                        />
-                    </div>
-
                 </div>
 
-                {/* Tab bar mobile */}
-                {!isDesktop && (
-                    <div className="flex flex-shrink-0 bg-white border-t border-gray-200">
-                        <button
-                            onClick={() => setMobileTab("pdf")}
-                            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "pdf" ? "text-blue-600 border-t-2 border-blue-600 -mt-px" : "text-gray-500"}`}
-                        >
-                            <FileText size={20} /><span>PDF</span>
-                        </button>
-                        <button
-                            onClick={() => setMobileTab("assistant")}
-                            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "assistant" ? "text-teal-600 border-t-2 border-teal-600 -mt-px" : "text-gray-500"}`}
-                        >
-                            <Bot size={20} /><span>Assistant</span>
-                        </button>
-                    </div>
-                )}
-
+                {/* Assistant — toujours monté, jamais démonté */}
+                <div className="flex flex-col bg-white overflow-hidden" style={assistantStyle}>
+                    <ExoAssistantPanel
+                        onClose={() => { }}
+                        onImageCapture={handleImageCapture}
+                    />
+                </div>
             </div>
-        </MathJaxContext>
+
+            {/* Tab bar mobile */}
+            {!isDesktop && (
+                <div className="flex flex-shrink-0 bg-white border-t border-gray-200">
+                    <button
+                        onClick={() => setMobileTab("pdf")}
+                        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "pdf" ? "text-blue-600 border-t-2 border-blue-600 -mt-px" : "text-gray-500"}`}
+                    >
+                        <FileText size={20} /><span>PDF</span>
+                    </button>
+                    <button
+                        onClick={() => setMobileTab("assistant")}
+                        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 text-xs font-medium transition ${mobileTab === "assistant" ? "text-teal-600 border-t-2 border-teal-600 -mt-px" : "text-gray-500"}`}
+                    >
+                        <Bot size={20} /><span>Assistant</span>
+                    </button>
+                </div>
+            )}
+        </div>
     );
 }
