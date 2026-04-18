@@ -3,12 +3,12 @@ import { useState, useEffect, useCallback } from "react";
 import { db } from "@/firebase";
 import {
     collection, doc, setDoc, getDocs, getDoc,
-    updateDoc, serverTimestamp, query, orderBy, limit
+    updateDoc, deleteDoc, serverTimestamp
 } from "firebase/firestore";
 import {
     Save, RefreshCw, Plus, AlertCircle, CheckCircle,
     BarChart2, Settings, Users, TrendingUp, DollarSign,
-    Zap, Video, Image, ChevronUp, ChevronDown, Shield, ShieldOff
+    Zap, Video, Image, ChevronUp, ChevronDown, Shield, ShieldOff, Trash2
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -304,6 +304,18 @@ export default function QuotaLimit() {
         finally { setActionUserId(null); }
     };
 
+    const deleteUser = async (userId: string, displayName?: string) => {
+        const label = displayName || userId.slice(0, 10) + "…";
+        if (!confirm(`Supprimer le quota de "${label}" ? Cette action est irréversible.`)) return;
+        setActionUserId(userId);
+        try {
+            await deleteDoc(doc(db, "quotas", userId));
+            setMessage({ type: "success", text: `✅ Quota de "${label}" supprimé` });
+            await loadAnalytics();
+        } catch { setMessage({ type: "error", text: "❌ Erreur suppression quota" }); }
+        finally { setActionUserId(null); }
+    };
+
     const updateField = (planId: string, field: keyof PlanConfig, value: string | number) => {
         setPlans(prev => ({ ...prev, [planId]: { ...prev[planId], [field]: value } }));
     };
@@ -537,6 +549,11 @@ export default function QuotaLimit() {
                                                         <button onClick={() => toggleBlockUser(user.id, isBlocked)} disabled={isActing}
                                                             className={`p-1.5 rounded-lg transition disabled:opacity-50 ${isBlocked ? "bg-green-100 text-green-600" : "bg-red-50 text-red-400"}`}>
                                                             {isBlocked ? <Shield size={13} /> : <ShieldOff size={13} />}
+                                                        </button>
+                                                        <button onClick={() => deleteUser(user.id, user.displayName)} disabled={isActing}
+                                                            className="p-1.5 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-500 transition disabled:opacity-50"
+                                                            title="Supprimer le quota">
+                                                            <Trash2 size={13} />
                                                         </button>
                                                     </div>
                                                 </div>

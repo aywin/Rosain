@@ -20,6 +20,7 @@ export default function QuizPage() {
   const [selectedCourse, setSelectedCourse] = useState<string>("");
   const [selectedVideo, setSelectedVideo] = useState<string>("");
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
 
   // Récupérer les cours
   useEffect(() => {
@@ -72,6 +73,25 @@ export default function QuizPage() {
     fetchQuizzes();
   }, [selectedCourse, selectedVideo]);
 
+  // Rafraîchir la liste après sauvegarde
+  const handleSaved = async () => {
+    setEditingQuiz(null);
+    setSelectedCourse("");
+    setSelectedVideo("");
+    const snapshot = await getDocs(collection(db, "quizzes"));
+    setQuizzes(
+      snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Quiz, "id">) }))
+    );
+  };
+
+  // Passer en mode édition
+  const handleEdit = (quiz: Quiz) => {
+    setEditingQuiz(quiz);
+    setSelectedCourse(quiz.courseId);
+    setSelectedVideo(quiz.videoId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // Supprimer un quiz
   const handleDelete = async (quizId: string) => {
     if (!confirm("Voulez-vous vraiment supprimer ce quiz ?")) return;
@@ -101,6 +121,9 @@ export default function QuizPage() {
           setSelectedCourse={setSelectedCourse}
           selectedVideo={selectedVideo}
           setSelectedVideo={setSelectedVideo}
+          editingQuiz={editingQuiz}
+          onSaved={handleSaved}
+          onCancel={() => { setEditingQuiz(null); setSelectedCourse(""); setSelectedVideo(""); }}
         />
       </div>
 
@@ -123,12 +146,14 @@ export default function QuizPage() {
               </div>
               <div className="space-x-2">
                 <button
+                  type="button"
                   className="px-4 py-2 bg-blue-500 text-white rounded"
-                  onClick={() => alert("Edit non implémenté")}
+                  onClick={() => handleEdit(quiz)}
                 >
                   Edit
                 </button>
                 <button
+                  type="button"
                   className="px-4 py-2 bg-red-500 text-white rounded"
                   onClick={() => handleDelete(quiz.id)}
                 >
