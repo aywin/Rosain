@@ -1,4 +1,3 @@
-// front/src/app/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -8,6 +7,8 @@ import { auth, db } from "@/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import CourseSection from "@/components/CourseSection";
 import StatsSection from "@/components/GlobalStats";
+import ExplainerSection from "@/components/ExplainerSection";
+import OnboardingTour from "@/components/OnboardingTour";
 
 export default function HomePage() {
   const [user, setUser] = useState<any>(null);
@@ -43,7 +44,11 @@ export default function HomePage() {
 
   return (
     <main style={{ backgroundColor: colors.white }} className="min-h-screen text-gray-800">
-      {/* Hero Section avec image de fond */}
+
+      {/* Tour onboarding + bouton "?" flottant */}
+      <OnboardingTour />
+
+      {/* Hero Section */}
       <div className="px-5 py-6">
         <section
           className="relative py-20 px-6 text-center overflow-hidden rounded-3xl"
@@ -63,6 +68,7 @@ export default function HomePage() {
               Apprenez à votre rythme grâce à des cours vidéo de qualité, des quiz interactifs et un suivi personnalisé.
             </p>
             <button
+              id="hero-explore-btn"
               onClick={handleExploreCourses}
               style={{ backgroundColor: colors.primaryBlue }}
               className="inline-block px-8 py-4 rounded-xl font-semibold text-white text-lg shadow-2xl hover:shadow-2xl hover:scale-105 transition-all duration-300"
@@ -89,10 +95,7 @@ export default function HomePage() {
                 key={i}
                 className="bg-white text-gray-800 p-8 rounded-2xl shadow-md border border-gray-200 hover:shadow-xl transition-shadow duration-300"
               >
-                <h3
-                  className="text-2xl font-semibold mb-3"
-                  style={{ color: colors.primaryGreen }}
-                >
+                <h3 className="text-2xl font-semibold mb-3" style={{ color: colors.primaryGreen }}>
                   {item.emoji} {item.title}
                 </h3>
                 <p className="text-base leading-relaxed text-gray-600">{item.desc}</p>
@@ -102,6 +105,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Vidéos + Guide interactif */}
+      <ExplainerSection />
+
       {/* Section des cours */}
       <CourseSection />
 
@@ -109,10 +115,7 @@ export default function HomePage() {
       <StatsSection />
 
       {/* Call to action */}
-      <section
-        style={{ backgroundColor: colors.darkBlue }}
-        className="text-white py-20 px-6 text-center"
-      >
+      <section style={{ backgroundColor: colors.darkBlue }} className="text-white py-20 px-6 text-center">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-6 text-white">
             Commencez dès aujourd'hui à apprendre autrement
@@ -126,6 +129,7 @@ export default function HomePage() {
           </button>
         </div>
       </section>
+
     </main>
   );
 }
