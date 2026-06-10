@@ -349,7 +349,8 @@ export default function ParentDashboardPage() {
                     return;
                 }
                 const userData = userSnap.data();
-                if (userData.role !== "parent" && userData.role !== "tuteur") {
+                const { isParent } = await import("@/utils/roles");
+                if (!isParent(userData.role)) {
                     router.push("/");
                     return;
                 }

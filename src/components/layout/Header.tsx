@@ -1,16 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/firebase";
+import { auth, db } from "@/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import LogoutButton from "@/components/auth/LogoutButton";
+import { isTeacher, isSuperAdmin, isStudent, isParent } from "@/utils/roles";
 
 export default function Header() {
   const [user, setUser] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(setUser);
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      setUser(u);
+      if (u) {
+        const snap = await getDoc(doc(db, "users", u.uid));
+        if (snap.exists()) setRole(snap.data().role?.trim() || null);
+      } else {
+        setRole(null);
+      }
+    });
     return () => unsubscribe();
   }, []);
 
@@ -33,6 +44,30 @@ export default function Header() {
         </>
       ) : (
         <>
+          {(isTeacher(role) || isSuperAdmin(role)) && (
+            <button
+              className="hover:bg-gray-100 px-3 py-2 rounded text-sm font-medium text-teal-700"
+              onClick={() => router.push("/teacher")}
+            >
+              Espace enseignant
+            </button>
+          )}
+          {isStudent(role) && (
+            <button
+              className="hover:bg-gray-100 px-3 py-2 rounded text-sm font-medium text-teal-700"
+              onClick={() => router.push("/eleve")}
+            >
+              Mes devoirs
+            </button>
+          )}
+          {isParent(role) && (
+            <button
+              className="hover:bg-gray-100 px-3 py-2 rounded text-sm"
+              onClick={() => router.push("/parent")}
+            >
+              Espace parent
+            </button>
+          )}
           <button
             className="hover:bg-gray-100 px-3 py-2 rounded text-sm"
             onClick={() => router.push("/mycourses")}

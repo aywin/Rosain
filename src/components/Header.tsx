@@ -23,6 +23,7 @@ import { auth, db } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import Image from "next/image";
+import { isTeacher, isSuperAdmin, isStudent, isParent } from "@/utils/roles";
 
 export default function Header() {
   const [user, setUser] = useState<any>(null);
@@ -32,6 +33,7 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileDropdown, setMobileDropdown] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const closeDropdownTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
   const colors = {
@@ -135,8 +137,13 @@ export default function Header() {
               <div
                 key={menu.id}
                 className="relative"
-                onMouseEnter={() => setOpenDropdown(menu.id)}
-                onMouseLeave={() => setOpenDropdown(null)}
+                onMouseEnter={() => {
+                  if (closeDropdownTimeout.current) clearTimeout(closeDropdownTimeout.current);
+                  setOpenDropdown(menu.id);
+                }}
+                onMouseLeave={() => {
+                  closeDropdownTimeout.current = setTimeout(() => setOpenDropdown(null), 200);
+                }}
               >
                 <button
                   id={`nav-${menu.id}`}
@@ -175,7 +182,7 @@ export default function Header() {
 
           {/* Actions Desktop */}
           <div className="hidden lg:flex items-center gap-3">
-            {role === "superadmin" && (
+            {isSuperAdmin(role) && (
               <Link
                 href="/admin"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors shadow-sm"
@@ -185,6 +192,45 @@ export default function Header() {
               >
                 <Settings size={18} />
                 <span className="font-medium">Admin</span>
+              </Link>
+            )}
+
+            {(isTeacher(role) || isSuperAdmin(role)) && (
+              <Link
+                href="/teacher"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors shadow-sm"
+                style={{ backgroundColor: colors.green }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = "0.9"}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+              >
+                <BookOpen size={18} />
+                <span className="font-medium">Espace enseignant</span>
+              </Link>
+            )}
+
+            {isStudent(role) && (
+              <Link
+                href="/eleve"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors shadow-sm"
+                style={{ backgroundColor: colors.green }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = "0.9"}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+              >
+                <ClipboardList size={18} />
+                <span className="font-medium">Espace élève</span>
+              </Link>
+            )}
+
+            {isParent(role) && (
+              <Link
+                href="/parent"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-colors shadow-sm"
+                style={{ backgroundColor: colors.green }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = "0.9"}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
+              >
+                <User size={18} />
+                <span className="font-medium">Espace parent</span>
               </Link>
             )}
 
@@ -314,7 +360,7 @@ export default function Header() {
               <span className="font-medium">À propos</span>
             </Link>
 
-            {role === "superadmin" && (
+            {isSuperAdmin(role) && (
               <Link
                 href="/admin"
                 onClick={closeMobileMenu}
@@ -323,6 +369,42 @@ export default function Header() {
               >
                 <Settings size={20} />
                 <span className="font-medium">Administration</span>
+              </Link>
+            )}
+
+            {(isTeacher(role) || isSuperAdmin(role)) && (
+              <Link
+                href="/teacher"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-colors mt-2"
+                style={{ backgroundColor: colors.green }}
+              >
+                <BookOpen size={20} />
+                <span className="font-medium">Espace enseignant</span>
+              </Link>
+            )}
+
+            {isStudent(role) && (
+              <Link
+                href="/eleve"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-colors mt-2"
+                style={{ backgroundColor: colors.green }}
+              >
+                <ClipboardList size={20} />
+                <span className="font-medium">Espace élève</span>
+              </Link>
+            )}
+
+            {isParent(role) && (
+              <Link
+                href="/parent"
+                onClick={closeMobileMenu}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-colors mt-2"
+                style={{ backgroundColor: colors.green }}
+              >
+                <User size={20} />
+                <span className="font-medium">Espace parent</span>
               </Link>
             )}
 
