@@ -636,6 +636,21 @@ export default function GroupDetailPage() {
                                     </div>
                                   )}
 
+                                  {/* Attached file */}
+                                  {(sub as any)?.fileUrl && (
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <span className="text-xs text-gray-500">Fichier joint :</span>
+                                      <a
+                                        href={(sub as any).fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-blue-600 hover:underline font-medium"
+                                      >
+                                        {(sub as any).fileName || "Voir le fichier"}
+                                      </a>
+                                    </div>
+                                  )}
+
                                   {/* Correction form */}
                                   {canCorrect && (
                                     <div className="space-y-2 mt-2 pt-2 border-t border-gray-100">

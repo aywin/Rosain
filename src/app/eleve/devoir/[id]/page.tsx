@@ -6,10 +6,12 @@ import { auth, db } from "@/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import {
-  ArrowLeft, ClipboardList, Clock, Check, Loader2, Upload, AlertCircle,
+  ArrowLeft, ClipboardList, Clock, Check, Loader2, AlertCircle, Eye,
 } from "lucide-react";
 import QuizPlayerEleve from "@/components/teacher/QuizPlayerEleve";
+import FileUploadZone from "@/components/teacher/FileUploadZone";
 import { getOrCreateSubmission, submitWork, saveQuizAnswers } from "@/helpers/teacherFetchers";
+import { storagePaths } from "@/helpers/storageHelpers";
 import type { Assignment, Submission, QuizAnswerItem } from "@/type/teacher";
 
 export default function DevoirPage() {
@@ -21,12 +23,11 @@ export default function DevoirPage() {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Text submission
   const [text, setText] = useState("");
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [submittingText, setSubmittingText] = useState(false);
   const [textSubmitted, setTextSubmitted] = useState(false);
-
-  // Quiz
   const [quizSubmitted, setQuizSubmitted] = useState(false);
 
   useEffect(() => {
@@ -42,6 +43,8 @@ export default function DevoirPage() {
       const sub = await getOrCreateSubmission(assignmentId, user.uid, a.groupId);
       setSubmission(sub);
       setText(sub.textContent || "");
+      setFileUrl((sub as any).fileUrl || null);
+      setFileName((sub as any).fileName || null);
       setTextSubmitted(sub.status === "submitted" || sub.status === "corrected");
       setQuizSubmitted(!!(sub.quizAnswers && sub.quizAnswers.length > 0));
       setLoading(false);
@@ -50,9 +53,9 @@ export default function DevoirPage() {
   }, [assignmentId, router]);
 
   const handleSubmitText = async () => {
-    if (!userId || !text.trim()) return;
+    if (!userId) return;
     setSubmittingText(true);
-    await submitWork(assignmentId, userId, text.trim());
+    await submitWork(assignmentId, userId, text.trim(), undefined, fileUrl || undefined, fileName || undefined);
     setSubmission((prev) => prev ? { ...prev, status: "submitted", textContent: text.trim() } : prev);
     setTextSubmitted(true);
     setSubmittingText(false);
@@ -151,7 +154,7 @@ export default function DevoirPage() {
           </div>
         )}
 
-        {/* Submitted notice (waiting) */}
+        {/* Submitted notice */}
         {(isSubmitted || textSubmitted) && !isCorrected && (
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3">
             <Check className="w-5 h-5 text-amber-600 flex-shrink-0" />
@@ -162,7 +165,7 @@ export default function DevoirPage() {
           </div>
         )}
 
-        {/* ── Quiz section ── */}
+        {/* Quiz */}
         {hasQuiz && assignment?.questions && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <QuizPlayerEleve
@@ -174,7 +177,7 @@ export default function DevoirPage() {
           </div>
         )}
 
-        {/* ── Text submission ── */}
+        {/* Text answer */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <label className="text-sm font-semibold text-gray-700 mb-3 block">
             {canEditText ? "Rédigez votre réponse écrite" : "Votre réponse écrite"}
@@ -183,30 +186,48 @@ export default function DevoirPage() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={!canEditText}
-            rows={10}
+            rows={8}
             placeholder="Rédigez votre devoir ici…"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-teal-500 resize-none disabled:bg-gray-50 disabled:text-gray-600 disabled:cursor-not-allowed"
           />
           <p className="text-xs text-gray-400 mt-1.5">{text.length} caractère(s)</p>
         </div>
 
-        {/* PDF placeholder */}
-        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-5">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
-              <Upload className="w-5 h-5 text-gray-300" />
+        {/* File upload / read-only file view */}
+        {canEditText ? (
+          userId && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+              <FileUploadZone
+                storagePath={storagePaths.submission(userId, assignmentId, "")}
+                accept="pdfAndImages"
+                label="Joindre un fichier (photo de votre travail, PDF) — optionnel"
+                initialUrl={fileUrl || undefined}
+                initialName={fileName || undefined}
+                onUploadComplete={(url, name) => { setFileUrl(url); setFileName(name); }}
+                onRemove={() => { setFileUrl(null); setFileName(null); }}
+              />
             </div>
-            <p className="text-sm font-medium text-gray-400">Envoi de fichier (PDF / Photo)</p>
-            <span className="text-xs text-gray-300 bg-gray-50 px-3 py-1 rounded-full">Bientôt disponible</span>
+          )
+        ) : fileUrl ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3">
+            <p className="text-sm text-gray-600 flex-1">Fichier joint :</p>
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium transition"
+            >
+              <Eye className="w-4 h-4" /> {fileName || "Voir le fichier"}
+            </a>
           </div>
-        </div>
+        ) : null}
 
-        {/* Submit text button */}
+        {/* Submit */}
         {canEditText && (
           <button
             type="button"
             onClick={handleSubmitText}
-            disabled={submittingText || !text.trim()}
+            disabled={submittingText || (!text.trim() && !fileUrl)}
             className="w-full bg-teal-700 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-800 disabled:opacity-50 flex items-center justify-center gap-2 transition"
           >
             {submittingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

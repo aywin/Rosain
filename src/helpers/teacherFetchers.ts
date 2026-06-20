@@ -124,7 +124,9 @@ export async function submitWork(
   assignmentId: string,
   studentId: string,
   textContent: string,
-  quizAnswers?: QuizAnswerItem[]
+  quizAnswers?: QuizAnswerItem[],
+  fileUrl?: string,
+  fileName?: string
 ): Promise<void> {
   const id = `${studentId}_${assignmentId}`;
   const { setDoc } = await import("firebase/firestore");
@@ -136,6 +138,8 @@ export async function submitWork(
     submittedAt: serverTimestamp(),
   };
   if (quizAnswers && quizAnswers.length > 0) payload.quizAnswers = quizAnswers;
+  if (fileUrl) payload.fileUrl = fileUrl;
+  if (fileName) payload.fileName = fileName;
   await setDoc(doc(db, "submissions", id), payload, { merge: true });
 }
 
