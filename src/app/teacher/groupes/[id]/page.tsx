@@ -191,7 +191,7 @@ export default function GroupDetailPage() {
   };
 
   const handleDeleteAssignment = async (aId: string) => {
-    if (!confirm("Supprimer cet assignement ?")) return;
+    if (!confirm("Supprimer ce travail ?")) return;
     await deleteAssignment(aId);
     setAssignments((prev) => prev.filter((a) => a.id !== aId));
     if (openAssignmentId === aId) setOpenAssignmentId(null);
@@ -315,17 +315,17 @@ export default function GroupDetailPage() {
             )}
           </section>
 
-          {/* ── Assignements & Soumissions ── */}
+          {/* ── Travaux assignés & Copies ── */}
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Assignements & Soumissions</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Travaux assignés</h2>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => router.push("/teacher/resources")}
                   className="flex items-center gap-1.5 text-sm font-medium text-teal-700 border border-teal-200 px-3 py-2 rounded-xl hover:bg-teal-50 transition"
                 >
-                  <Library className="w-4 h-4" /> Mes ressources
+                  <Library className="w-4 h-4" /> Ma bibliothèque
                 </button>
                 <button
                   type="button"
@@ -341,7 +341,7 @@ export default function GroupDetailPage() {
             {showAssignForm && (
               <div className="bg-white border border-teal-100 rounded-2xl p-5 mb-4 space-y-5">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-800">Nouvel assignement</p>
+                  <p className="font-semibold text-gray-800">Assigner un travail</p>
                   <button type="button" title="Fermer" onClick={() => setShowAssignForm(false)} className="text-gray-400 hover:text-gray-600">
                     <X className="w-4 h-4" />
                   </button>
@@ -351,7 +351,7 @@ export default function GroupDetailPage() {
                 {myResources.length > 0 && (
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
                     <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1">
-                      <Library className="w-3.5 h-3.5" /> Importer depuis mes ressources
+                      <Library className="w-3.5 h-3.5" /> Importer depuis ma bibliothèque
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {myResources.map((r) => (
@@ -477,14 +477,14 @@ export default function GroupDetailPage() {
                   className="w-full bg-teal-700 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-teal-800 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  Créer l'assignement
+                  Assigner au groupe
                 </button>
               </div>
             )}
 
             {assignments.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
-                <p className="text-gray-400 text-sm">Aucun assignement pour ce groupe.</p>
+                <p className="text-gray-400 text-sm">Aucun travail assigné à ce groupe.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -531,7 +531,7 @@ export default function GroupDetailPage() {
                           </div>
                           <button
                             type="button"
-                            title="Supprimer l'assignement"
+                            title="Supprimer ce travail"
                             onClick={() => handleDeleteAssignment(a.id)}
                             className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition flex-shrink-0"
                           >
@@ -567,7 +567,7 @@ export default function GroupDetailPage() {
                             {isOpen ? (
                               <><ChevronUp className="w-4 h-4" /> Masquer</>
                             ) : (
-                              <><ChevronDown className="w-4 h-4" /> Voir les soumissions ({total})</>
+                              <><ChevronDown className="w-4 h-4" /> Voir les copies ({total})</>
                             )}
                           </button>
                         </div>

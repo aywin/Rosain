@@ -242,3 +242,25 @@ export async function updateTeacherContent(id: string, data: Partial<TeacherCont
 export async function deleteTeacherContent(id: string): Promise<void> {
   await deleteDoc(doc(db, "teacherContent", id));
 }
+
+// ── Teacher Dashboard Stats ──────────────────────────────────────────────────
+
+export async function getTeacherDashboardData(teacherId: string) {
+  const groups = await getTeacherGroups(teacherId);
+  if (groups.length === 0) return { groups, assignments: [], submissions: [] };
+
+  const groupIds = groups.map((g) => g.id);
+  const allAssignments: Assignment[] = [];
+  const allSubmissions: Submission[] = [];
+
+  for (let i = 0; i < groupIds.length; i += 30) {
+    const batch = groupIds.slice(i, i + 30);
+    const [aSnap, sSnap] = await Promise.all([
+      getDocs(query(collection(db, "assignments"), where("groupId", "in", batch))),
+      getDocs(query(collection(db, "submissions"), where("groupId", "in", batch))),
+    ]);
+    aSnap.docs.forEach((d) => allAssignments.push({ id: d.id, ...d.data() } as Assignment));
+    sSnap.docs.forEach((d) => allSubmissions.push({ id: d.id, ...d.data() } as Submission));
+  }
+  return { groups, assignments: allAssignments, submissions: allSubmissions };
+}

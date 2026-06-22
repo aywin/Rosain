@@ -29,6 +29,8 @@ export default function DevoirPage() {
   const [submittingText, setSubmittingText] = useState(false);
   const [textSubmitted, setTextSubmitted] = useState(false);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [teacherFileUrl, setTeacherFileUrl] = useState<string | null>(null);
+  const [teacherFileName, setTeacherFileName] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -39,6 +41,17 @@ export default function DevoirPage() {
       if (!aSnap.exists()) { router.push("/eleve"); return; }
       const a = { id: aSnap.id, ...aSnap.data() } as Assignment;
       setAssignment(a);
+
+      if (a.contentId) {
+        const cSnap = await getDoc(doc(db, "teacherContent", a.contentId));
+        if (cSnap.exists()) {
+          const cData = cSnap.data();
+          if (cData.fileUrl) {
+            setTeacherFileUrl(cData.fileUrl);
+            setTeacherFileName(cData.fileName || "Fichier du professeur");
+          }
+        }
+      }
 
       const sub = await getOrCreateSubmission(assignmentId, user.uid, a.groupId);
       setSubmission(sub);
@@ -91,7 +104,7 @@ export default function DevoirPage() {
             onClick={() => router.push("/eleve")}
             className="flex items-center gap-2 text-teal-100 hover:text-white text-sm mb-3 transition"
           >
-            <ArrowLeft className="w-4 h-4" /> Retour à mes assignements
+            <ArrowLeft className="w-4 h-4" /> Retour à mes travaux
           </button>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
@@ -128,6 +141,27 @@ export default function DevoirPage() {
                 <p className="text-sm text-amber-700 whitespace-pre-wrap">{assignment.instructions}</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Teacher attached file */}
+        {teacherFileUrl && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <Eye className="w-4 h-4 text-blue-700" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-blue-600 font-medium">Document fourni par le professeur</p>
+              <p className="text-sm text-blue-800 font-semibold truncate">{teacherFileName}</p>
+            </div>
+            <a
+              href={teacherFileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:border-blue-300 transition flex-shrink-0"
+            >
+              Ouvrir
+            </a>
           </div>
         )}
 

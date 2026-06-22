@@ -140,8 +140,8 @@ export default function TeacherResourcesPage() {
                 <Library className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">Mes ressources</h1>
-                <p className="text-teal-100 text-sm">Cours, devoirs et exercices que vous créez</p>
+                <h1 className="text-xl font-bold">Ma bibliothèque</h1>
+                <p className="text-teal-100 text-sm">Préparez vos cours, devoirs et exercices avant de les assigner</p>
               </div>
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function TeacherResourcesPage() {
           ) : (
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
-                {myContent.length} ressource{myContent.length !== 1 ? "s" : ""} créée{myContent.length !== 1 ? "s" : ""}
+                {myContent.length} contenu{myContent.length !== 1 ? "s" : ""} dans votre bibliothèque
               </p>
               <button
                 type="button"
@@ -274,9 +274,9 @@ export default function TeacherResourcesPage() {
           ) : myContent.length === 0 && !showForm ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
               <Library className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-700 font-semibold mb-1">Aucune ressource pour l'instant</p>
+              <p className="text-gray-700 font-semibold mb-1">Votre bibliothèque est vide</p>
               <p className="text-gray-400 text-sm max-w-sm mx-auto">
-                Créez vos cours (avec PDF), devoirs et exercices ici. Ils seront disponibles dans vos groupes.
+                Préparez vos cours (PDF), devoirs et exercices ici. Vous pourrez ensuite les assigner à vos groupes.
               </p>
             </div>
           ) : (

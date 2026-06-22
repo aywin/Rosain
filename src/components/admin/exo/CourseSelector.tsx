@@ -2,7 +2,7 @@
 "use client";
 import { Level, Subject, Course } from "@/components/types";
 import { useEffect, useState } from "react";
-import { FaBook, FaTimes, FaPlus } from "react-icons/fa";
+import { FaBook, FaTimes } from "react-icons/fa";
 
 interface Props {
   levelId: string;
@@ -45,11 +45,12 @@ export default function CourseSelector({
       !courseIds.includes(c.id) // Exclure les cours déjà sélectionnés
   );
 
-  const addCourse = () => {
-    if (selectedCourseId && !courseIds.includes(selectedCourseId)) {
+  const addCourse = (courseId?: string) => {
+    const id = courseId || selectedCourseId;
+    if (id && !courseIds.includes(id)) {
       setFormState((prev: any) => ({
         ...prev,
-        course_ids: [...courseIds, selectedCourseId],
+        course_ids: [...prev.course_ids, id],
       }));
       setSelectedCourseId("");
     }
@@ -69,6 +70,7 @@ export default function CourseSelector({
       <div className="flex flex-wrap gap-3">
         {/* Niveau */}
         <select
+          title="Sélectionner un niveau"
           className="border px-3 py-2 rounded min-w-[180px]"
           value={levelId}
           onChange={(e) =>
@@ -89,6 +91,7 @@ export default function CourseSelector({
 
         {/* Matière */}
         <select
+          title="Sélectionner une matière"
           className="border px-3 py-2 rounded min-w-[180px]"
           value={subjectId}
           onChange={(e) =>
@@ -126,6 +129,7 @@ export default function CourseSelector({
                 <span className="text-sm font-medium">{course.title}</span>
                 <button
                   type="button"
+                  title="Retirer ce cours"
                   onClick={() => removeCourse(course.id)}
                   className="hover:bg-blue-200 rounded-full p-0.5 transition"
                 >
@@ -139,15 +143,16 @@ export default function CourseSelector({
         {/* Ajout de cours */}
         <div className="flex gap-2">
           <select
+            title="Ajouter un cours"
             className="border border-gray-300 px-3 py-2 rounded flex-1"
-            value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
+            value=""
+            onChange={(e) => { if (e.target.value) addCourse(e.target.value); }}
             disabled={filteredCourses.length === 0}
           >
             <option value="">
               {filteredCourses.length === 0
                 ? "Tous les cours disponibles sont sélectionnés"
-                : "Ajouter un cours..."}
+                : "Sélectionner un cours pour l'ajouter..."}
             </option>
             {filteredCourses.map((c) => (
               <option key={c.id} value={c.id}>
@@ -155,15 +160,6 @@ export default function CourseSelector({
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={addCourse}
-            disabled={!selectedCourseId}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded transition flex items-center gap-2"
-          >
-            <FaPlus size={12} />
-            Ajouter
-          </button>
         </div>
 
         {courseIds.length === 0 && (
