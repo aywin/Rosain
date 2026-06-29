@@ -20,6 +20,12 @@ export interface QuizAnswerItem {
   isCorrect: boolean;
 }
 
+export interface SelectedExercise {
+  id: string;
+  source: "exercises" | "teacherContent";
+  title: string;
+}
+
 export interface Assignment {
   id: string;
   title: string;
@@ -27,9 +33,11 @@ export interface Assignment {
   teacherId: string;
   type: "course" | "exercise" | "devoir";
   contentId?: string;
+  contentSource?: "exercises" | "teacherContent";
+  selectedExercises?: SelectedExercise[];
   instructions?: string;
   deadline?: any;
-  questions?: QuizQuestion[];   // quiz intégré (devoir/exercice)
+  questions?: QuizQuestion[];
   createdAt: any;
 }
 

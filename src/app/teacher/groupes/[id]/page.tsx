@@ -23,7 +23,7 @@ import {
   saveCorrection,
   getTeacherContent,
 } from "@/helpers/teacherFetchers";
-import type { Group, Assignment, Submission, QuizQuestion, TeacherContent } from "@/type/teacher";
+import type { Group, Assignment, Submission, QuizQuestion, TeacherContent, SelectedExercise } from "@/type/teacher";
 
 const TYPE_LABELS: Record<string, string> = {
   course: "Cours",
@@ -67,6 +67,7 @@ export default function GroupDetailPage() {
   // Create assignment form
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [courses, setCourses] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
   const [exercises, setExercises] = useState<any[]>([]);
   const [myResources, setMyResources] = useState<TeacherContent[]>([]);
   const [assignType, setAssignType] = useState<"course" | "exercise" | "devoir">("devoir");
@@ -76,6 +77,13 @@ export default function GroupDetailPage() {
   const [assignInstructions, setAssignInstructions] = useState("");
   const [assignQuestions, setAssignQuestions] = useState<QuizQuestion[]>([]);
   const [saving, setSaving] = useState(false);
+  // Exercise picker
+  const [selectedExos, setSelectedExos] = useState<SelectedExercise[]>([]);
+  const [showExoPicker, setShowExoPicker] = useState(false);
+  const [exoPickerTab, setExoPickerTab] = useState<"exercises" | "teacherContent">("teacherContent");
+  const [exoSearch, setExoSearch] = useState("");
+  const [exoSubjectFilter, setExoSubjectFilter] = useState("");
+  const [exoCourseFilter, setExoCourseFilter] = useState("");
 
   // Submissions panel
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
@@ -85,12 +93,13 @@ export default function GroupDetailPage() {
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
       if (!user) return;
-      const [g, a, courseSnap, exoSnap, resources] = await Promise.all([
+      const [g, a, courseSnap, exoSnap, resources, subjectSnap] = await Promise.all([
         getGroup(groupId),
         getGroupAssignments(groupId),
         getDocs(collection(db, "courses")),
         getDocs(collection(db, "exercises")),
         getTeacherContent(user.uid),
+        getDocs(collection(db, "subjects")),
       ]);
       if (!g) { router.push("/teacher"); return; }
       setGroup(g);
@@ -98,6 +107,7 @@ export default function GroupDetailPage() {
       setCourses(courseSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setExercises(exoSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setMyResources(resources);
+      setSubjects(subjectSnap.docs.map((d) => ({ id: d.id, name: (d.data() as any).name || d.id })));
 
       const [subs, usersSnap] = await Promise.all([
         getGroupSubmissions(groupId),
@@ -151,27 +161,35 @@ export default function GroupDetailPage() {
 
   // Import a resource template into the form
   const handleImportResource = (r: TeacherContent) => {
-    // "cours" teacher content is text-based (PDF coming later) → treated as "devoir" for assignment
     const aType: "course" | "exercise" | "devoir" =
       r.type === "exercise" ? "exercise" : "devoir";
     setAssignType(aType);
     setAssignTitle(r.title);
     setAssignInstructions(r.description || "");
     setAssignQuestions(r.questions || []);
-    setAssignContentId("");
+    if (aType === "exercise") {
+      setSelectedExos((prev) =>
+        prev.some((e) => e.id === r.id && e.source === "teacherContent")
+          ? prev
+          : [...prev, { id: r.id, source: "teacherContent", title: r.title }]
+      );
+    } else {
+      setAssignContentId(r.id);
+    }
   };
 
   const handleCreateAssignment = async () => {
     if (!assignTitle.trim()) return;
     if (assignType === "course" && !assignContentId) return;
-    if (assignType === "exercise" && !assignContentId) return;
+    if (assignType === "exercise" && selectedExos.length === 0) return;
     setSaving(true);
     const id = await createAssignment({
       title: assignTitle.trim(),
       groupId,
       teacherId: auth.currentUser!.uid,
       type: assignType,
-      contentId: assignContentId || undefined,
+      contentId: assignType === "course" ? assignContentId : undefined,
+      selectedExercises: assignType === "exercise" ? selectedExos : undefined,
       instructions: assignInstructions || undefined,
       deadline: assignDeadline ? new Date(assignDeadline) : undefined,
       questions: assignQuestions.length > 0 ? assignQuestions : undefined,
@@ -179,14 +197,19 @@ export default function GroupDetailPage() {
     setAssignments((prev) => [...prev, {
       id, title: assignTitle.trim(), groupId,
       teacherId: auth.currentUser!.uid, type: assignType,
-      contentId: assignContentId || undefined,
+      contentId: assignType === "course" ? assignContentId : undefined,
+      selectedExercises: assignType === "exercise" ? selectedExos : undefined,
       instructions: assignInstructions || undefined,
       deadline: assignDeadline ? new Date(assignDeadline) : undefined,
       questions: assignQuestions.length > 0 ? assignQuestions : undefined,
       createdAt: null,
     }]);
     setAssignTitle(""); setAssignContentId(""); setAssignDeadline("");
-    setAssignInstructions(""); setAssignQuestions([]); setShowAssignForm(false); setSaving(false);
+    setAssignInstructions(""); setAssignQuestions([]);
+    setSelectedExos([]); setShowExoPicker(false);
+    setExoPickerTab("teacherContent"); setExoSearch("");
+    setExoSubjectFilter(""); setExoCourseFilter("");
+    setShowAssignForm(false); setSaving(false);
     setOpenAssignmentId(id);
   };
 
@@ -382,7 +405,16 @@ export default function GroupDetailPage() {
                     <button
                       type="button"
                       key={t}
-                      onClick={() => { setAssignType(t); setAssignContentId(""); }}
+                      onClick={() => {
+                        setAssignType(t);
+                        setAssignContentId("");
+                        setSelectedExos([]);
+                        setShowExoPicker(false);
+                        setExoPickerTab("teacherContent");
+                        setExoSearch("");
+                        setExoSubjectFilter("");
+                        setExoCourseFilter("");
+                      }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
                         assignType === t ? "bg-teal-700 text-white border-teal-700" : "bg-white text-gray-600 border-gray-200 hover:border-teal-400"
                       }`}
@@ -421,19 +453,221 @@ export default function GroupDetailPage() {
                 )}
 
                 {assignType === "exercise" && (
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Exercice *</label>
-                    <select
-                      title="Choisir un exercice"
-                      value={assignContentId}
-                      onChange={(e) => setAssignContentId(e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-600 block">Exercices *</label>
+
+                    {/* Trigger */}
+                    <button
+                      type="button"
+                      onClick={() => setShowExoPicker((v) => !v)}
+                      className="w-full flex items-center justify-between border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white hover:border-teal-400 transition text-left"
                     >
-                      <option value="">Sélectionner un exercice…</option>
-                      {exercises.map((e) => (
-                        <option key={e.id} value={e.id}>{e.title || e.titre || e.id}</option>
-                      ))}
-                    </select>
+                      <span className={selectedExos.length ? "text-gray-800 font-medium" : "text-gray-400"}>
+                        {selectedExos.length
+                          ? `${selectedExos.length} exercice(s) sélectionné(s)`
+                          : "Cliquer pour ajouter des exercices…"}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showExoPicker ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {/* Picker panel */}
+                    {showExoPicker && (
+                      <div className="border border-gray-200 rounded-2xl bg-white shadow-lg overflow-hidden">
+                        {/* Tabs */}
+                        <div className="flex border-b border-gray-100">
+                          {(["teacherContent", "exercises"] as const).map((tab) => (
+                            <button
+                              key={tab}
+                              type="button"
+                              onClick={() => {
+                                setExoPickerTab(tab);
+                                setExoSearch("");
+                                setExoSubjectFilter("");
+                                setExoCourseFilter("");
+                              }}
+                              className={`flex-1 py-2.5 text-sm font-medium transition border-b-2 ${
+                                exoPickerTab === tab
+                                  ? "text-teal-700 border-teal-700"
+                                  : "text-gray-500 border-transparent hover:text-gray-700"
+                              }`}
+                            >
+                              {tab === "teacherContent" ? "Ma bibliothèque" : "Rosaine Academy"}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="p-3 space-y-2">
+                          {exoPickerTab === "teacherContent" ? (
+                            /* ── Bibliothèque ── */
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Rechercher dans ma bibliothèque…"
+                                value={exoSearch}
+                                onChange={(e) => setExoSearch(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500"
+                              />
+                              <div className="max-h-52 overflow-y-auto space-y-0.5">
+                                {myResources
+                                  .filter(
+                                    (r) =>
+                                      r.type === "exercise" &&
+                                      (!exoSearch || r.title.toLowerCase().includes(exoSearch.toLowerCase()))
+                                  )
+                                  .map((r) => {
+                                    const isSelected = selectedExos.some(
+                                      (e) => e.id === r.id && e.source === "teacherContent"
+                                    );
+                                    return (
+                                      <button
+                                        key={r.id}
+                                        type="button"
+                                        onClick={() =>
+                                          setSelectedExos((prev) =>
+                                            isSelected
+                                              ? prev.filter(
+                                                  (e) => !(e.id === r.id && e.source === "teacherContent")
+                                                )
+                                              : [...prev, { id: r.id, source: "teacherContent", title: r.title }]
+                                          )
+                                        }
+                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition ${
+                                          isSelected ? "bg-teal-50 text-teal-800" : "hover:bg-gray-50 text-gray-700"
+                                        }`}
+                                      >
+                                        <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition ${isSelected ? "bg-teal-700 border-teal-700" : "border-gray-300"}`}>
+                                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                                        </div>
+                                        <span className="flex-1 truncate">{r.title}</span>
+                                        {(r.questions?.length ?? 0) > 0 && (
+                                          <span className="text-xs text-gray-400 flex-shrink-0">{r.questions.length}Q</span>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                {myResources.filter((r) => r.type === "exercise").length === 0 && (
+                                  <p className="text-xs text-gray-400 text-center py-4">
+                                    Aucun exercice dans votre bibliothèque.
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            /* ── Rosaine : matière → cours → exercices ── */
+                            <>
+                              <select
+                                title="Matière"
+                                value={exoSubjectFilter}
+                                onChange={(e) => { setExoSubjectFilter(e.target.value); setExoCourseFilter(""); }}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500"
+                              >
+                                <option value="">Matière…</option>
+                                {subjects.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+
+                              {exoSubjectFilter && (
+                                <select
+                                  title="Cours"
+                                  value={exoCourseFilter}
+                                  onChange={(e) => setExoCourseFilter(e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500"
+                                >
+                                  <option value="">Cours…</option>
+                                  {courses
+                                    .filter((c) => c.subject_id === exoSubjectFilter)
+                                    .map((c) => (
+                                      <option key={c.id} value={c.id}>{c.titre || c.title || c.id}</option>
+                                    ))}
+                                </select>
+                              )}
+
+                              {exoCourseFilter && (
+                                <div className="max-h-52 overflow-y-auto space-y-0.5">
+                                  {exercises
+                                    .filter(
+                                      (e) =>
+                                        e.course_ids?.includes(exoCourseFilter) ||
+                                        e.course_id === exoCourseFilter
+                                    )
+                                    .map((e) => {
+                                      const label = e.title || e.titre || e.id;
+                                      const isSelected = selectedExos.some(
+                                        (s) => s.id === e.id && s.source === "exercises"
+                                      );
+                                      return (
+                                        <button
+                                          key={e.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setSelectedExos((prev) =>
+                                              isSelected
+                                                ? prev.filter(
+                                                    (s) => !(s.id === e.id && s.source === "exercises")
+                                                  )
+                                                : [...prev, { id: e.id, source: "exercises", title: label }]
+                                            )
+                                          }
+                                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition ${
+                                            isSelected ? "bg-teal-50 text-teal-800" : "hover:bg-gray-50 text-gray-700"
+                                          }`}
+                                        >
+                                          <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition ${isSelected ? "bg-teal-700 border-teal-700" : "border-gray-300"}`}>
+                                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                                          </div>
+                                          <span className="flex-1 truncate">{label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  {exercises.filter(
+                                    (e) =>
+                                      e.course_ids?.includes(exoCourseFilter) ||
+                                      e.course_id === exoCourseFilter
+                                  ).length === 0 && (
+                                    <p className="text-xs text-gray-400 text-center py-4">
+                                      Aucun exercice pour ce cours.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {!exoSubjectFilter && (
+                                <p className="text-xs text-gray-400 text-center py-3">
+                                  Sélectionnez une matière pour commencer.
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tags des exercices sélectionnés */}
+                    {selectedExos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {selectedExos.map((e) => (
+                          <div
+                            key={`${e.source}-${e.id}`}
+                            className="flex items-center gap-1.5 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-medium px-2.5 py-1 rounded-full"
+                          >
+                            <span className="truncate max-w-[180px]">{e.title}</span>
+                            <button
+                              type="button"
+                              title="Retirer"
+                              onClick={() =>
+                                setSelectedExos((prev) =>
+                                  prev.filter((s) => !(s.id === e.id && s.source === e.source))
+                                )
+                              }
+                              className="text-teal-500 hover:text-teal-800 flex-shrink-0"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
