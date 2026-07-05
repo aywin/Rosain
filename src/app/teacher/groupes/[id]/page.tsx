@@ -706,7 +706,7 @@ export default function GroupDetailPage() {
                   disabled={
                     saving || !assignTitle.trim() ||
                     (assignType === "course" && !assignContentId) ||
-                    (assignType === "exercise" && !assignContentId)
+                    (assignType === "exercise" && selectedExos.length === 0)
                   }
                   className="w-full bg-teal-700 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-teal-800 disabled:opacity-50 flex items-center justify-center gap-2"
                 >

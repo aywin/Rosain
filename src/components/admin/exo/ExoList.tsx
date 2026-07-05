@@ -19,7 +19,8 @@ interface Exo {
   id: string;
   title: string;
   description: string;
-  course_id: string;
+  course_id?: string;    // legacy
+  course_ids?: string[]; // nouveau format (array)
   statement_text: string;
   solution_text: string;
   order: number;
@@ -163,9 +164,12 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
     fetchData();
   };
 
+  // Gère les deux formats : course_id (legacy) et course_ids (nouveau)
+  const getExoCourseId = (e: Exo) => e.course_ids?.[0] ?? e.course_id ?? "";
+
   const filteredExos = exos
     .filter((e) => {
-      const course = courseMap[e.course_id];
+      const course = courseMap[getExoCourseId(e)];
       if (!course) return false;
 
       return (
@@ -221,6 +225,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
             Niveau
           </label>
           <select
+            title="Filtrer par niveau"
             value={selectedLevel}
             onChange={(e) => setSelectedLevel(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -239,6 +244,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
             Matière
           </label>
           <select
+            title="Filtrer par matière"
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -257,6 +263,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
             Cours
           </label>
           <select
+            title="Filtrer par cours"
             value={selectedCourse}
             onChange={(e) => setSelectedCourse(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -291,7 +298,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                 className="space-y-3"
               >
                 {filteredExos.map((exo, index) => {
-                  const course = courseMap[exo.course_id];
+                  const course = courseMap[getExoCourseId(exo)];
                   return (
                     <Draggable key={exo.id} draggableId={exo.id} index={index}>
                       {(provided, snapshot) => (
@@ -330,6 +337,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                               <input
                                 type="number"
                                 min="1"
+                                title="Ordre"
                                 className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-center font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                 value={
                                   editingOrders[exo.id] !== undefined
@@ -362,6 +370,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                               />
 
                               <button
+                                type="button"
                                 className="bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
                                 onClick={() => setEditing(exo)}
                               >
@@ -370,6 +379,7 @@ export default function ExoList({ refreshTrigger }: ExoListProps) {
                               </button>
 
                               <button
+                                type="button"
                                 className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow flex items-center gap-2"
                                 onClick={() => handleDelete(exo.id)}
                               >
