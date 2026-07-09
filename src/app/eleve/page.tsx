@@ -60,6 +60,7 @@ export default function EleveDashboard() {
   const [markingDone, setMarkingDone] = useState<string | null>(null);
   const [exerciseModal, setExerciseModal] = useState<{ assignment: Assignment; exos: ExoData[] } | null>(null);
   const [loadingExo, setLoadingExo] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<"all" | "todo" | "submitted" | "corrected">("all");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -313,7 +314,7 @@ export default function EleveDashboard() {
         )}
 
         {/* ── Travaux par groupe ── */}
-        {grouped.length === 0 ? (
+        {assignments.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
             <BookOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-700 font-semibold mb-1">Aucun travail pour l'instant</p>
@@ -321,9 +322,49 @@ export default function EleveDashboard() {
           </div>
         ) : (
           <section>
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">Mes travaux</h2>
+            {/* Filtres */}
+            <div className="flex gap-2 flex-wrap mb-4">
+              {([
+                { id: "all", label: "Tous", count: assignments.length },
+                { id: "todo", label: "À faire", count: todoItems.length },
+                { id: "submitted", label: "Remis", count: assignments.filter(a => getStatus(a) === "submitted").length },
+                { id: "corrected", label: "Corrigés", count: correctedItems.length },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setActiveFilter(f.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition border ${
+                    activeFilter === f.id
+                      ? "bg-teal-700 text-white border-teal-700"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-teal-400"
+                  }`}
+                >
+                  {f.label}
+                  {f.count > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      activeFilter === f.id ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                    }`}>
+                      {f.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
             <div className="space-y-8">
-              {grouped.map(({ group, items }) => (
+              {grouped
+                .map(({ group, items }) => ({
+                  group,
+                  items: items.filter((a) => {
+                    const s = getStatus(a);
+                    if (activeFilter === "todo") return s === "not_started" || s === "in_progress";
+                    if (activeFilter === "submitted") return s === "submitted";
+                    if (activeFilter === "corrected") return s === "corrected";
+                    return true;
+                  }),
+                }))
+                .filter(({ items }) => items.length > 0)
+                .map(({ group, items }) => (
                 <div key={group.id}>
                   <div className="flex items-center gap-2 mb-3">
                     <Users className="w-4 h-4 text-gray-400" />
@@ -495,6 +536,19 @@ export default function EleveDashboard() {
                       {exerciseModal.assignment.instructions}
                     </p>
                   </div>
+                )}
+
+                {/* Fichier joint par le prof à l'assignation */}
+                {exerciseModal?.assignment.fileUrl && (
+                  <a
+                    href={exerciseModal.assignment.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium hover:bg-blue-100 transition"
+                  >
+                    <Download className="w-4 h-4 flex-shrink-0" />
+                    {exerciseModal.assignment.fileName || "Fichier du professeur"}
+                  </a>
                 )}
 
                 {/* Liste des exercices */}

@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import ProtectTeacherRoute from "@/components/auth/ProtectTeacherRoute";
 import QuizBuilder from "@/components/teacher/QuizBuilder";
+import FileUploadZone from "@/components/teacher/FileUploadZone";
+import { storagePaths } from "@/helpers/storageHelpers";
 import {
   getGroup,
   addStudentToGroup,
@@ -76,6 +78,8 @@ export default function GroupDetailPage() {
   const [assignDeadline, setAssignDeadline] = useState("");
   const [assignInstructions, setAssignInstructions] = useState("");
   const [assignQuestions, setAssignQuestions] = useState<QuizQuestion[]>([]);
+  const [assignFileUrl, setAssignFileUrl] = useState<string | null>(null);
+  const [assignFileName, setAssignFileName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Exercise picker
   const [selectedExos, setSelectedExos] = useState<SelectedExercise[]>([]);
@@ -89,6 +93,9 @@ export default function GroupDetailPage() {
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
   const [grades, setGrades] = useState<Record<string, { grade: string; feedback: string }>>({});
   const [savingCorrection, setSavingCorrection] = useState<string | null>(null);
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<"travaux" | "eleves" | "corrections">("travaux");
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
@@ -183,25 +190,30 @@ export default function GroupDetailPage() {
     if (assignType === "course" && !assignContentId) return;
     if (assignType === "exercise" && selectedExos.length === 0) return;
     setSaving(true);
+    const filePayload = assignFileUrl
+      ? { fileUrl: assignFileUrl, fileName: assignFileName || undefined }
+      : {};
     const id = await createAssignment({
       title: assignTitle.trim(),
       groupId,
       teacherId: auth.currentUser!.uid,
       type: assignType,
-      contentId: assignType === "course" ? assignContentId : undefined,
+      contentId: assignType !== "exercise" ? assignContentId || undefined : undefined,
       selectedExercises: assignType === "exercise" ? selectedExos : undefined,
       instructions: assignInstructions || undefined,
       deadline: assignDeadline ? new Date(assignDeadline) : undefined,
       questions: assignQuestions.length > 0 ? assignQuestions : undefined,
+      ...filePayload,
     });
     setAssignments((prev) => [...prev, {
       id, title: assignTitle.trim(), groupId,
       teacherId: auth.currentUser!.uid, type: assignType,
-      contentId: assignType === "course" ? assignContentId : undefined,
+      contentId: assignType !== "exercise" ? assignContentId || undefined : undefined,
       selectedExercises: assignType === "exercise" ? selectedExos : undefined,
       instructions: assignInstructions || undefined,
       deadline: assignDeadline ? new Date(assignDeadline) : undefined,
       questions: assignQuestions.length > 0 ? assignQuestions : undefined,
+      ...filePayload,
       createdAt: null,
     }]);
     setAssignTitle(""); setAssignContentId(""); setAssignDeadline("");
@@ -209,6 +221,7 @@ export default function GroupDetailPage() {
     setSelectedExos([]); setShowExoPicker(false);
     setExoPickerTab("teacherContent"); setExoSearch("");
     setExoSubjectFilter(""); setExoCourseFilter("");
+    setAssignFileUrl(null); setAssignFileName(null);
     setShowAssignForm(false); setSaving(false);
     setOpenAssignmentId(id);
   };
@@ -254,12 +267,14 @@ export default function GroupDetailPage() {
     );
   }
 
+  const pendingCount = allSubs.filter((s) => s.status === "submitted").length;
+
   return (
     <ProtectTeacherRoute>
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
         <div className="bg-teal-700 text-white">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 pb-0">
             <button
               type="button"
               onClick={() => router.push("/teacher")}
@@ -267,7 +282,7 @@ export default function GroupDetailPage() {
             >
               <ArrowLeft className="w-4 h-4" /> Retour
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
@@ -276,13 +291,43 @@ export default function GroupDetailPage() {
                 <p className="text-teal-100 text-sm">{students.length} élève(s)</p>
               </div>
             </div>
+            {/* Tab bar */}
+            <div className="flex gap-0">
+              {([
+                { id: "travaux", label: "Travaux", badge: assignments.length },
+                { id: "eleves", label: "Élèves", badge: students.length },
+                { id: "corrections", label: "Corrections", badge: pendingCount },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition ${
+                    activeTab === tab.id
+                      ? "border-white text-white"
+                      : "border-transparent text-teal-200 hover:text-white"
+                  }`}
+                >
+                  {tab.label}
+                  {tab.badge > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      tab.id === "corrections" && tab.badge > 0
+                        ? "bg-amber-400 text-amber-900"
+                        : "bg-white/20 text-white"
+                    }`}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
-          {/* ── Élèves ── */}
-          <section>
+          {/* ══ TAB ÉLÈVES ══ */}
+          {activeTab === "eleves" && <section>
             <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">Élèves du groupe</h2>
             <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
               <p className="text-sm font-medium text-gray-700 mb-3">Ajouter un élève par email</p>
@@ -336,10 +381,10 @@ export default function GroupDetailPage() {
                 ))}
               </div>
             )}
-          </section>
+          </section>}
 
-          {/* ── Travaux assignés & Copies ── */}
-          <section>
+          {/* ══ TAB TRAVAUX ══ */}
+          {activeTab === "travaux" && <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">Travaux assignés</h2>
               <div className="flex items-center gap-2">
@@ -414,6 +459,8 @@ export default function GroupDetailPage() {
                         setExoSearch("");
                         setExoSubjectFilter("");
                         setExoCourseFilter("");
+                        setAssignFileUrl(null);
+                        setAssignFileName(null);
                       }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
                         assignType === t ? "bg-teal-700 text-white border-teal-700" : "bg-white text-gray-600 border-gray-200 hover:border-teal-400"
@@ -640,6 +687,26 @@ export default function GroupDetailPage() {
                             </>
                           )}
                         </div>
+
+                        {/* Footer confirmer */}
+                        <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between bg-gray-50 rounded-b-2xl">
+                          <span className="text-xs text-gray-500">
+                            {selectedExos.length > 0
+                              ? `${selectedExos.length} exercice(s) sélectionné(s)`
+                              : "Aucun exercice sélectionné"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowExoPicker(false)}
+                            className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition ${
+                              selectedExos.length > 0
+                                ? "bg-teal-700 text-white hover:bg-teal-800"
+                                : "bg-gray-200 text-gray-500 hover:bg-gray-300"
+                            }`}
+                          >
+                            Confirmer
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -681,6 +748,20 @@ export default function GroupDetailPage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 resize-none"
                   />
                 </div>
+
+                {assignType !== "course" && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Joindre un fichier (optionnel)</label>
+                    <FileUploadZone
+                      storagePath={storagePaths.assignment(auth.currentUser?.uid ?? "tmp")}
+                      accept="pdfAndImages"
+                      initialUrl={assignFileUrl || undefined}
+                      initialName={assignFileName || undefined}
+                      onUploadComplete={(url, name) => { setAssignFileUrl(url); setAssignFileName(name); }}
+                      onRemove={() => { setAssignFileUrl(null); setAssignFileName(null); }}
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Date limite (optionnel)</label>
@@ -944,7 +1025,159 @@ export default function GroupDetailPage() {
                 })}
               </div>
             )}
-          </section>
+          </section>}
+
+          {/* ══ TAB CORRECTIONS ══ */}
+          {activeTab === "corrections" && (
+            <section>
+              {pendingCount === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
+                  <Check className="w-10 h-10 text-green-400 mx-auto mb-3" />
+                  <p className="text-gray-700 font-semibold mb-1">Aucune copie en attente</p>
+                  <p className="text-gray-400 text-sm">Tous les travaux soumis ont été corrigés.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {assignments.map((a) => {
+                    const studentsToCorrect = students.filter((s) => {
+                      const sub = getSubForStudent(a.id, s.uid);
+                      return sub?.status === "submitted" || sub?.status === "corrected";
+                    });
+                    if (studentsToCorrect.length === 0) return null;
+                    const pendingInA = studentsToCorrect.filter(
+                      (s) => getSubForStudent(a.id, s.uid)?.status === "submitted"
+                    ).length;
+                    return (
+                      <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        {/* Assignment header */}
+                        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center text-teal-700 flex-shrink-0">
+                            {TYPE_ICONS[a.type]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 text-sm truncate">{a.title}</p>
+                            <span className="text-xs text-teal-700">{TYPE_LABELS[a.type]}</span>
+                          </div>
+                          {pendingInA > 0 && (
+                            <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2.5 py-1 rounded-full flex-shrink-0">
+                              {pendingInA} à corriger
+                            </span>
+                          )}
+                        </div>
+                        {/* Student submissions */}
+                        <div className="divide-y divide-gray-50">
+                          {studentsToCorrect.map((student) => {
+                            const sub = getSubForStudent(a.id, student.uid);
+                            if (!sub) return null;
+                            const status = sub.status;
+                            const key = `${student.uid}_${a.id}`;
+                            const g = grades[key] || { grade: "", feedback: "" };
+                            return (
+                              <div key={student.uid} className="px-5 py-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-teal-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                      {student.prenom?.[0]?.toUpperCase() || "?"}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-800">{student.prenom} {student.nom}</span>
+                                  </div>
+                                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${STATUS_COLORS[status]}`}>
+                                    {STATUS_LABELS[status]}
+                                  </span>
+                                </div>
+                                {/* Quiz answers */}
+                                {sub.quizAnswers && sub.quizAnswers.length > 0 && a.questions && (
+                                  <div className="mb-3 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                                    <p className="text-xs font-semibold text-blue-800 mb-2">
+                                      Quiz : {sub.quizAnswers.filter((qa) => qa.isCorrect).length}/{a.questions.length} correctes
+                                    </p>
+                                    <div className="space-y-1.5">
+                                      {sub.quizAnswers.map((qa, qi) => {
+                                        const q = a.questions![qa.questionIndex];
+                                        if (!q) return null;
+                                        return (
+                                          <div key={qi} className={`text-xs px-2 py-1 rounded-lg flex items-start gap-2 ${qa.isCorrect ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+                                            {qa.isCorrect ? <Check className="w-3 h-3 mt-0.5 flex-shrink-0" /> : <X className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+                                            <div>
+                                              <span className="font-medium">Q{qi + 1} :</span> {q.options[qa.selectedOption] || "Non répondu"}
+                                              {qa.justification && <span className="block text-gray-500 italic mt-0.5">"{qa.justification}"</span>}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Text */}
+                                {sub.textContent && (
+                                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                                    <p className="text-xs text-gray-500 mb-1 font-medium">Réponse écrite</p>
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{sub.textContent}</p>
+                                  </div>
+                                )}
+                                {/* File */}
+                                {(sub as any)?.fileUrl && (
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-xs text-gray-500">Fichier joint :</span>
+                                    <a href={(sub as any).fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline font-medium">
+                                      {(sub as any).fileName || "Voir le fichier"}
+                                    </a>
+                                  </div>
+                                )}
+                                {/* Correction form */}
+                                <div className="space-y-2 pt-2 border-t border-gray-100">
+                                  {status === "corrected" && sub.grade !== undefined && (
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs bg-green-50 text-green-700 font-bold px-2 py-0.5 rounded-lg">Note actuelle : {sub.grade}/20</span>
+                                      {sub.feedback && <span className="text-xs text-gray-500 italic truncate">"{sub.feedback}"</span>}
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <div className="w-24 flex-shrink-0">
+                                      <label className="text-xs text-gray-500 mb-1 block">Note /20</label>
+                                      <input
+                                        type="number"
+                                        title={`Note de ${student.prenom}`}
+                                        min={0} max={20} step={0.5}
+                                        value={g.grade}
+                                        onChange={(e) => setGrades((prev) => ({ ...prev, [key]: { ...prev[key], grade: e.target.value } }))}
+                                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-teal-500"
+                                        placeholder="0–20"
+                                      />
+                                    </div>
+                                    <div className="flex-1">
+                                      <label className="text-xs text-gray-500 mb-1 block">Commentaire</label>
+                                      <input
+                                        type="text"
+                                        title="Commentaire à l'élève"
+                                        value={g.feedback}
+                                        onChange={(e) => setGrades((prev) => ({ ...prev, [key]: { ...prev[key], feedback: e.target.value } }))}
+                                        placeholder="Bon travail, à revoir…"
+                                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-teal-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveCorrection(a.id, student.uid)}
+                                    disabled={savingCorrection === key || !g.grade}
+                                    className="flex items-center gap-1.5 bg-teal-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-teal-800 disabled:opacity-50 transition"
+                                  >
+                                    {savingCorrection === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                    {status === "corrected" ? "Modifier la note" : "Enregistrer la note"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </ProtectTeacherRoute>

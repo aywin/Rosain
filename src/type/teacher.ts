@@ -35,6 +35,8 @@ export interface Assignment {
   contentId?: string;
   contentSource?: "exercises" | "teacherContent";
   selectedExercises?: SelectedExercise[];
+  fileUrl?: string;
+  fileName?: string;
   instructions?: string;
   deadline?: any;
   questions?: QuizQuestion[];

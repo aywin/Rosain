@@ -59,6 +59,9 @@ export const storagePaths = {
   teacherResource: (teacherId: string, contentId: string, fileName: string) =>
     `teacherContent/${teacherId}/${contentId}/${fileName}`,
 
+  assignment: (teacherId: string) =>
+    `assignments/${teacherId}`,
+
   submission: (studentId: string, assignmentId: string, fileName: string) =>
     `submissions/${studentId}/${assignmentId}/${fileName}`,
 };

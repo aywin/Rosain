@@ -42,7 +42,12 @@ export default function DevoirPage() {
       const a = { id: aSnap.id, ...aSnap.data() } as Assignment;
       setAssignment(a);
 
-      if (a.contentId) {
+      // Fichier joint directement à l'assignation (prioritaire)
+      if (a.fileUrl) {
+        setTeacherFileUrl(a.fileUrl);
+        setTeacherFileName(a.fileName || "Fichier du professeur");
+      } else if (a.contentId) {
+        // Fallback : fichier via bibliothèque prof (contentId → teacherContent)
         const cSnap = await getDoc(doc(db, "teacherContent", a.contentId));
         if (cSnap.exists()) {
           const cData = cSnap.data();
