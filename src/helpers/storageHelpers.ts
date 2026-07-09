@@ -60,7 +60,7 @@ export const storagePaths = {
     `teacherContent/${teacherId}/${contentId}/${fileName}`,
 
   assignment: (teacherId: string) =>
-    `assignments/${teacherId}`,
+    `teacherContent/${teacherId}/assignments`,
 
   submission: (studentId: string, assignmentId: string, fileName: string) =>
     `submissions/${studentId}/${assignmentId}/${fileName}`,
