@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { MathJax } from "better-react-mathjax";
+import { preprocessLatex } from "@/components/admin/utils/latexUtils";
+import QuizPlayerEleve from "@/components/teacher/QuizPlayerEleve";
 
 interface ExoData {
   id: string;
@@ -13,18 +16,22 @@ interface ExoData {
   statement_files?: string[];
   difficulty?: string;
 }
+
+interface TabData { assignment: Assignment; exos: ExoData[]; loading: boolean; }
+
 import {
   BookOpen, FileText, ClipboardList, Clock, Loader2,
   ChevronRight, Users, Check, AlertCircle, ExternalLink, Star,
-  AlertTriangle, X, Eye, Download,
+  AlertTriangle, X, Download,
 } from "lucide-react";
 import {
   getStudentAssignments,
   getStudentSubmissions,
   getStudentGroupsInfo,
   updateSubmissionStatus,
+  saveQuizAnswers,
 } from "@/helpers/teacherFetchers";
-import type { Assignment, Submission, Group } from "@/type/teacher";
+import type { Assignment, Submission, Group, QuizAnswerItem } from "@/type/teacher";
 
 const TYPE_LABELS: Record<string, string> = {
   course: "Cours",
@@ -58,8 +65,9 @@ export default function EleveDashboard() {
   const [submissionsMap, setSubmissionsMap] = useState<Record<string, Submission>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [markingDone, setMarkingDone] = useState<string | null>(null);
-  const [exerciseModal, setExerciseModal] = useState<{ assignment: Assignment; exos: ExoData[] } | null>(null);
-  const [loadingExo, setLoadingExo] = useState(false);
+  const [openTabs, setOpenTabs] = useState<TabData[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabQuizDone, setTabQuizDone] = useState<Record<string, boolean>>({});
   const [activeFilter, setActiveFilter] = useState<"all" | "todo" | "submitted" | "corrected">("all");
 
   useEffect(() => {
@@ -114,6 +122,11 @@ export default function EleveDashboard() {
           [a.id]: { ...(prev[a.id] || {}), assignmentId: a.id, studentId: userId, groupId: a.groupId, status: "in_progress" } as Submission,
         }));
       }
+      // Tab already open → just activate it
+      if (openTabs.some(t => t.assignment.id === a.id)) {
+        setActiveTabId(a.id);
+        return;
+      }
       const sources = a.selectedExercises?.length
         ? a.selectedExercises
         : a.contentId
@@ -124,8 +137,9 @@ export default function EleveDashboard() {
         router.push(`/exercices`);
         return;
       }
-
-      setLoadingExo(true);
+      // Open a loading tab immediately
+      setOpenTabs(prev => [...prev, { assignment: a, exos: [], loading: true }]);
+      setActiveTabId(a.id);
       const fetched: ExoData[] = [];
       for (const sel of sources) {
         const coll = sel.source === "teacherContent" ? "teacherContent" : "exercises";
@@ -139,12 +153,42 @@ export default function EleveDashboard() {
           );
         }
       }
-      setLoadingExo(false);
-      setExerciseModal({ assignment: a, exos: fetched });
+      setOpenTabs(prev => prev.map(t => t.assignment.id === a.id ? { ...t, exos: fetched, loading: false } : t));
     } else if (a.type === "devoir") {
       router.push(`/eleve/devoir/${a.id}`);
     }
   };
+
+  const closeTab = (assignmentId: string) => {
+    setOpenTabs(prev => {
+      const newTabs = prev.filter(t => t.assignment.id !== assignmentId);
+      if (activeTabId === assignmentId) {
+        setActiveTabId(newTabs.length > 0 ? newTabs[newTabs.length - 1].assignment.id : null);
+      }
+      return newTabs;
+    });
+  };
+
+  const handleTabQuizSubmit = async (a: Assignment, answers: QuizAnswerItem[]) => {
+    if (!userId) return;
+    await saveQuizAnswers(a.id, userId, a.groupId, answers);
+    await updateSubmissionStatus(a.id, userId, a.groupId, "submitted");
+    setTabQuizDone(prev => ({ ...prev, [a.id]: true }));
+    setSubmissionsMap(prev => ({
+      ...prev,
+      [a.id]: { ...(prev[a.id] || {}), assignmentId: a.id, studentId: userId, groupId: a.groupId, status: "submitted" } as Submission,
+    }));
+  };
+
+  const renderMathText = (text: string) =>
+    preprocessLatex(text)
+      .split(/\n{2,}/)
+      .filter(Boolean)
+      .map((p, i) => (
+        <div key={i} className="mb-2 text-sm leading-relaxed">
+          <MathJax dynamic hideUntilTypeset="first">{p}</MathJax>
+        </div>
+      ));
 
   const handleMarkDone = async (e: React.MouseEvent, a: Assignment) => {
     e.stopPropagation();
@@ -191,7 +235,7 @@ export default function EleveDashboard() {
 
   return (
     <>
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen bg-gray-50 ${openTabs.length > 0 ? "pb-[420px]" : ""}`}>
       {/* Header */}
       <div className="bg-teal-700 text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -486,160 +530,130 @@ export default function EleveDashboard() {
       </div>
     </div>
 
-    {/* ── Exercise modal ── */}
-    {(exerciseModal || loadingExo) && (
-      <div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
-        onClick={() => !loadingExo && setExerciseModal(null)}
-      >
-        <div
-          className="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-xl max-h-[90vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-teal-50 flex items-center justify-center text-teal-700 flex-shrink-0">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-800 text-sm truncate">
-                {exerciseModal?.assignment.title || "Exercice"}
-              </p>
-              <span className="text-xs text-teal-700">Exercice assigné</span>
-            </div>
-            <button
-              type="button"
-              title="Fermer"
-              onClick={() => setExerciseModal(null)}
-              disabled={loadingExo}
-              className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition flex-shrink-0"
+    {/* ── Onglets exercices (panel fixe en bas) ── */}
+    {openTabs.length > 0 && (
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-2xl flex flex-col" style={{ maxHeight: "420px" }}>
+        {/* Barre d'onglets */}
+        <div className="flex items-center gap-0 overflow-x-auto bg-gray-50 border-b border-gray-200 flex-shrink-0 px-1 pt-1">
+          {openTabs.map(tab => (
+            <div
+              key={tab.assignment.id}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-lg text-xs font-medium flex-shrink-0 border border-b-0 transition ${
+                activeTabId === tab.assignment.id
+                  ? "bg-white text-teal-700 border-gray-200 -mb-px"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 border-transparent cursor-pointer"
+              }`}
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+              <button type="button" onClick={() => setActiveTabId(tab.assignment.id)} className="truncate max-w-[150px] text-left">
+                {tab.assignment.title}
+              </button>
+              <button type="button" title="Fermer" onClick={() => closeTab(tab.assignment.id)} className="flex-shrink-0 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-200 p-0.5 transition">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
 
-          {/* Body */}
-          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-            {loadingExo ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin text-teal-700" />
+        {/* Contenu de l'onglet actif */}
+        {openTabs.map(tab => tab.assignment.id !== activeTabId ? null : (
+          <div key={tab.assignment.id} className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
+            {tab.loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-teal-700" />
               </div>
             ) : (
               <>
-                {/* Consignes du prof */}
-                {exerciseModal?.assignment.instructions && (
+                {/* Consignes */}
+                {tab.assignment.instructions && (
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
                     <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" /> Consignes
                     </p>
-                    <p className="text-sm text-amber-700 whitespace-pre-wrap">
-                      {exerciseModal.assignment.instructions}
-                    </p>
+                    <p className="text-sm text-amber-700 whitespace-pre-wrap">{tab.assignment.instructions}</p>
                   </div>
                 )}
 
-                {/* Fichier joint par le prof à l'assignation */}
-                {exerciseModal?.assignment.fileUrl && (
-                  <a
-                    href={exerciseModal.assignment.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium hover:bg-blue-100 transition"
-                  >
+                {/* Fichier joint par le prof */}
+                {tab.assignment.fileUrl && (
+                  <a href={tab.assignment.fileUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium hover:bg-blue-100 transition">
                     <Download className="w-4 h-4 flex-shrink-0" />
-                    {exerciseModal.assignment.fileName || "Fichier du professeur"}
+                    {tab.assignment.fileName || "Fichier du professeur"}
                   </a>
                 )}
 
-                {/* Liste des exercices */}
-                {exerciseModal && exerciseModal.exos.length === 0 && (
-                  <p className="text-sm text-gray-400 text-center py-4">
-                    Le contenu des exercices n'est pas disponible.
-                  </p>
+                {/* Exercices */}
+                {tab.exos.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">Contenu non disponible.</p>
                 )}
-                {exerciseModal?.exos.map((exo, idx) => (
-                  <div key={exo.id} className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
-                    {/* Titre exercice (si plusieurs) */}
-                    {(exerciseModal.exos.length > 1 || exo.title) && (
-                      <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-                        <span className="text-xs font-semibold text-teal-700 uppercase tracking-widest">
-                          {exerciseModal.exos.length > 1 ? `Exercice ${idx + 1}` : "Exercice"}
-                        </span>
-                        {exo.title && exerciseModal.exos.length > 1 && (
-                          <span className="text-xs text-gray-500 truncate">— {exo.title}</span>
-                        )}
-                        {exo.difficulty && (
-                          <span className="ml-auto text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
-                            {exo.difficulty}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="px-4 pb-4 pt-2 space-y-3">
-                      {exo.statement_text && (
-                        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                          {exo.statement_text}
-                        </p>
+                {tab.exos.map((exo, idx) => (
+                  <div key={exo.id} className="rounded-xl border border-gray-100 overflow-hidden">
+                    <div className="bg-teal-700 px-4 py-2.5 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-white uppercase tracking-widest">
+                        {tab.exos.length > 1 ? `Exercice ${idx + 1}` : "Exercice"}
+                        {exo.title && <span className="font-normal text-teal-200 ml-1.5">— {exo.title}</span>}
+                      </span>
+                      {exo.difficulty && (
+                        <span className="text-xs text-white bg-white/20 px-2 py-0.5 rounded-full">{exo.difficulty}</span>
                       )}
-                      {(exo.statement_files?.length ?? 0) > 0 && (
-                        <div className="space-y-1.5">
-                          {exo.statement_files!.map((url, i) => {
-                            const isPdf = url.toLowerCase().includes(".pdf") || url.toLowerCase().includes("pdf");
-                            return (
-                              <a
-                                key={i}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-sm text-blue-700 font-medium hover:bg-blue-100 transition"
-                              >
-                                {isPdf ? <Download className="w-4 h-4 flex-shrink-0" /> : <Eye className="w-4 h-4 flex-shrink-0" />}
-                                {isPdf ? `PDF ${i + 1}` : `Image ${i + 1}`}
+                    </div>
+                    <div className="px-4 py-3 bg-white space-y-2">
+                      {exo.statement_text && renderMathText(exo.statement_text)}
+                      {(exo.statement_files?.filter(Boolean).length ?? 0) > 0 && (
+                        <div className="space-y-2 mt-2">
+                          {exo.statement_files!.filter(Boolean).map((url, i) => {
+                            const isImg = /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url);
+                            return isImg ? (
+                              <img key={i} src={url} alt={`Illustration ${i + 1}`} className="max-w-full rounded-lg border border-gray-200" />
+                            ) : (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-sm text-blue-700 hover:bg-blue-100 transition">
+                                <Download className="w-4 h-4 flex-shrink-0" /> PDF {i + 1}
                               </a>
                             );
                           })}
                         </div>
                       )}
                       {!exo.statement_text && !exo.statement_files?.length && (
-                        <p className="text-xs text-gray-400 italic">Aucun contenu pour cet exercice.</p>
+                        <p className="text-xs text-gray-400 italic">Aucun contenu.</p>
                       )}
                     </div>
                   </div>
                 ))}
+
+                {/* Quiz de l'assignation */}
+                {(tab.assignment.questions?.length ?? 0) > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-100 p-4">
+                    <QuizPlayerEleve
+                      questions={tab.assignment.questions!}
+                      existingAnswers={submissionsMap[tab.assignment.id]?.quizAnswers}
+                      submitted={tabQuizDone[tab.assignment.id] || submissionsMap[tab.assignment.id]?.status === "submitted" || submissionsMap[tab.assignment.id]?.status === "corrected"}
+                      onSubmit={(answers) => handleTabQuizSubmit(tab.assignment, answers)}
+                    />
+                  </div>
+                )}
+
+                {/* Boutons d'action */}
+                <div className="flex gap-2 pb-2">
+                  {getStatus(tab.assignment) === "in_progress" && !tabQuizDone[tab.assignment.id] && (tab.assignment.questions?.length ?? 0) === 0 && (
+                    <button type="button"
+                      disabled={markingDone === tab.assignment.id}
+                      onClick={async (e) => { await handleMarkDone(e, tab.assignment); closeTab(tab.assignment.id); }}
+                      className="flex-1 flex items-center justify-center gap-2 bg-teal-700 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-teal-800 disabled:opacity-50 transition">
+                      {markingDone === tab.assignment.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      J'ai terminé
+                    </button>
+                  )}
+                  <button type="button" onClick={() => router.push("/exercices")}
+                    className="flex items-center justify-center gap-1.5 text-teal-700 border border-teal-200 text-sm px-4 py-2.5 rounded-xl hover:bg-teal-50 transition flex-shrink-0">
+                    <ExternalLink className="w-4 h-4" />
+                    <span className="hidden sm:inline">Tous les exercices</span>
+                  </button>
+                </div>
               </>
             )}
           </div>
-
-          {/* Footer */}
-          {exerciseModal && !loadingExo && (
-            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 space-y-2">
-              {getStatus(exerciseModal.assignment) === "in_progress" && (
-                <button
-                  type="button"
-                  disabled={markingDone === exerciseModal.assignment.id}
-                  onClick={async (e) => {
-                    await handleMarkDone(e, exerciseModal.assignment);
-                    setExerciseModal(null);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 bg-teal-700 text-white text-sm font-semibold py-3 rounded-xl hover:bg-teal-800 disabled:opacity-50 transition"
-                >
-                  {markingDone === exerciseModal.assignment.id
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Check className="w-4 h-4" />}
-                  J'ai terminé cet exercice
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => router.push("/exercices")}
-                className="w-full flex items-center justify-center gap-2 text-teal-700 border border-teal-200 text-sm font-medium py-2.5 rounded-xl hover:bg-teal-50 transition"
-              >
-                <ExternalLink className="w-4 h-4" /> Voir tous les exercices
-              </button>
-            </div>
-          )}
-        </div>
+        ))}
       </div>
     )}
     </>
