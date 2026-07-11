@@ -77,26 +77,56 @@ export async function createAssignment(data: Omit<Assignment, "id" | "createdAt"
   return ref.id;
 }
 
-export async function getGroupAssignments(groupId: string): Promise<Assignment[]> {
-  const q = query(collection(db, "assignments"), where("groupId", "==", groupId));
-  const snap = await getDocs(q);
+export async function getTeacherAssignments(teacherId: string): Promise<Assignment[]> {
+  const snap = await getDocs(query(collection(db, "assignments"), where("teacherId", "==", teacherId)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
 }
 
-export async function getStudentAssignments(studentId: string): Promise<Assignment[]> {
-  const q = query(collection(db, "groups"), where("studentIds", "array-contains", studentId));
-  const groupSnap = await getDocs(q);
-  if (groupSnap.empty) return [];
-  const groupIds = groupSnap.docs.map((d) => d.id);
-  const allAssignments: Assignment[] = [];
-  for (let i = 0; i < groupIds.length; i += 30) {
-    const batch = groupIds.slice(i, i + 30);
-    const aSnap = await getDocs(
-      query(collection(db, "assignments"), where("groupId", "in", batch))
+export async function getTeacherSubmissions(assignmentIds: string[]): Promise<Submission[]> {
+  const results: Submission[] = [];
+  for (let i = 0; i < assignmentIds.length; i += 30) {
+    const snap = await getDocs(
+      query(collection(db, "submissions"), where("assignmentId", "in", assignmentIds.slice(i, i + 30)))
     );
-    aSnap.docs.forEach((d) => allAssignments.push({ id: d.id, ...d.data() } as Assignment));
+    snap.docs.forEach((d) => results.push({ id: d.id, ...d.data() } as Submission));
   }
-  return allAssignments;
+  return results;
+}
+
+export async function getGroupAssignments(groupId: string): Promise<Assignment[]> {
+  const [s1, s2] = await Promise.all([
+    getDocs(query(collection(db, "assignments"), where("groupId", "==", groupId))),
+    getDocs(query(collection(db, "assignments"), where("groupIds", "array-contains", groupId))),
+  ]);
+  const seen = new Set<string>();
+  const result: Assignment[] = [];
+  [...s1.docs, ...s2.docs].forEach((d) => {
+    if (!seen.has(d.id)) { seen.add(d.id); result.push({ id: d.id, ...d.data() } as Assignment); }
+  });
+  return result;
+}
+
+export async function getStudentAssignments(studentId: string): Promise<Assignment[]> {
+  const groupSnap = await getDocs(
+    query(collection(db, "groups"), where("studentIds", "array-contains", studentId))
+  );
+  const groupIds = groupSnap.docs.map((d) => d.id);
+  const seen = new Set<string>();
+  const results: Assignment[] = [];
+  const push = (d: any) => { if (!seen.has(d.id)) { seen.add(d.id); results.push({ id: d.id, ...d.data() } as Assignment); } };
+
+  // Legacy groupId field
+  for (let i = 0; i < groupIds.length; i += 30) {
+    (await getDocs(query(collection(db, "assignments"), where("groupId", "in", groupIds.slice(i, i + 30))))).docs.forEach(push);
+  }
+  // New groupIds array
+  for (let i = 0; i < groupIds.length; i += 10) {
+    (await getDocs(query(collection(db, "assignments"), where("groupIds", "array-contains-any", groupIds.slice(i, i + 10))))).docs.forEach(push);
+  }
+  // Individual studentIds
+  (await getDocs(query(collection(db, "assignments"), where("studentIds", "array-contains", studentId)))).docs.forEach(push);
+
+  return results;
 }
 
 export async function deleteAssignment(assignmentId: string): Promise<void> {

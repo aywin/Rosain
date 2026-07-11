@@ -29,7 +29,9 @@ export interface SelectedExercise {
 export interface Assignment {
   id: string;
   title: string;
-  groupId: string;
+  groupId?: string;      // legacy — may be absent on multi-group assignments
+  groupIds?: string[];   // new: array of target group IDs
+  studentIds?: string[]; // individual students not in a group
   teacherId: string;
   type: "course" | "exercise" | "devoir";
   contentId?: string;

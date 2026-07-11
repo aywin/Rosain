@@ -58,7 +58,7 @@ export default function DevoirPage() {
         }
       }
 
-      const sub = await getOrCreateSubmission(assignmentId, user.uid, a.groupId);
+      const sub = await getOrCreateSubmission(assignmentId, user.uid, a.groupId || a.groupIds?.[0] || "");
       setSubmission(sub);
       setText(sub.textContent || "");
       setFileUrl((sub as any).fileUrl || null);
@@ -81,7 +81,7 @@ export default function DevoirPage() {
 
   const handleSubmitQuiz = async (answers: QuizAnswerItem[]) => {
     if (!userId || !assignment) return;
-    await saveQuizAnswers(assignmentId, userId, assignment.groupId, answers);
+    await saveQuizAnswers(assignmentId, userId, assignment.groupId || assignment.groupIds?.[0] || "", answers);
     setSubmission((prev) => prev ? { ...prev, quizAnswers: answers } : prev);
     setQuizSubmitted(true);
   };

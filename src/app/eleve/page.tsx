@@ -262,15 +262,16 @@ export default function EleveDashboard() {
       updateWork(tabId, { exos: fetched, loadingExos: false });
       const currentStatus = submissionsMap[a.id]?.status;
       if (!currentStatus || currentStatus === "not_started") {
-        await updateSubmissionStatus(a.id, userId, a.groupId, "in_progress");
+        const gId = a.groupId || a.groupIds?.[0] || "";
+        await updateSubmissionStatus(a.id, userId, gId, "in_progress");
         setSubmissionsMap(prev => ({
           ...prev,
-          [a.id]: { ...(prev[a.id] || {}), assignmentId: a.id, studentId: userId, groupId: a.groupId, status: "in_progress" } as Submission,
+          [a.id]: { ...(prev[a.id] || {}), assignmentId: a.id, studentId: userId, groupId: gId, status: "in_progress" } as Submission,
         }));
       }
     } else if (a.type === "devoir") {
       updateWork(tabId, { loadingSubmission: true });
-      const sub = await getOrCreateSubmission(a.id, userId, a.groupId);
+      const sub = await getOrCreateSubmission(a.id, userId, a.groupId || a.groupIds?.[0] || "");
       let teacherFileUrl: string | null = null;
       let teacherFileName: string | null = null;
       if (a.fileUrl) {
@@ -310,8 +311,9 @@ export default function EleveDashboard() {
 
   const handleExoQuizSubmit = async (a: Assignment, tabId: string, answers: QuizAnswerItem[]) => {
     if (!userId) return;
-    await saveQuizAnswers(a.id, userId, a.groupId, answers);
-    await updateSubmissionStatus(a.id, userId, a.groupId, "submitted");
+    const gId = a.groupId || a.groupIds?.[0] || "";
+    await saveQuizAnswers(a.id, userId, gId, answers);
+    await updateSubmissionStatus(a.id, userId, gId, "submitted");
     setSubmissionsMap(prev => ({ ...prev, [a.id]: { ...(prev[a.id] || {}), status: "submitted" } as Submission }));
     updateWork(tabId, { quizDone: true });
   };
@@ -319,7 +321,7 @@ export default function EleveDashboard() {
   const handleMarkDone = async (a: Assignment, tabId: string) => {
     if (!userId) return;
     setMarkingDone(a.id);
-    await updateSubmissionStatus(a.id, userId, a.groupId, "submitted");
+    await updateSubmissionStatus(a.id, userId, a.groupId || a.groupIds?.[0] || "", "submitted");
     setSubmissionsMap(prev => ({ ...prev, [a.id]: { ...(prev[a.id] || {}), status: "submitted" } as Submission }));
     setMarkingDone(null);
   };
@@ -817,7 +819,7 @@ export default function EleveDashboard() {
                       submitted={data.quizDone || isSubmitted || isCorrected}
                       onSubmit={async answers => {
                         if (!userId) return;
-                        await saveQuizAnswers(a.id, userId, a.groupId, answers);
+                        await saveQuizAnswers(a.id, userId, a.groupId || a.groupIds?.[0] || "", answers);
                         updateWork(tabId, { quizDone: true });
                       }}
                     />
